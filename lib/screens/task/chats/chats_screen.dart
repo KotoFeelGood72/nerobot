@@ -22,6 +22,24 @@ class ChatsScreen extends StatelessWidget {
   /// Получаем UID текущего пользователя
   String? get _myUid => FirebaseAuth.instance.currentUser?.uid;
 
+  Future<void> _navigateToTaskDetail(BuildContext context) async {
+    final myUid = _myUid;
+
+    if (myUid == null) return;
+
+    // Читаем роль из Firestore
+    final userDoc =
+        await FirebaseFirestore.instance.collection('users').doc(myUid).get();
+    final role = userDoc.data()?['type'] as String? ?? '';
+
+    if (role == 'customer') {
+      print('Good');
+      AutoRouter.of(context).push(TaskDetailCustomerRoute(taskId: taskId));
+    } else {
+      AutoRouter.of(context).push(TaskDetailRoute(taskId: taskId));
+    }
+  }
+
   /// Функция, которая возвращает имя «другого» участника чата (то есть того, чей UID
   /// не совпадает с _myUid). Если такого нет, возвращаем просто «Чат».
   Future<String> _chatTitle() async {
@@ -91,13 +109,9 @@ class ChatsScreen extends StatelessWidget {
           },
         ),
         actions: [
-          // При клике на «i» переходим на экран с деталями задачи,
-          // передавая taskId
           IconButton(
             icon: const Icon(Icons.info_outline_rounded),
-            onPressed: () {
-              AutoRouter.of(context).push(TaskDetailRoute(taskId: taskId));
-            },
+            onPressed: () => _navigateToTaskDetail(context),
           ),
         ],
       ),

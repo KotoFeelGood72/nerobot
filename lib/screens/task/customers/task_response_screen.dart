@@ -17,7 +17,6 @@ class TaskResponseScreen extends StatelessWidget {
   /// где поле "order" совпадает с переданным taskId, и сразу же для каждого
   /// отклика дополняет его данными пользователя из коллекции "users".
   Future<List<Map<String, dynamic>>> _fetchResponses() async {
-    // 1. Получаем все документы откликов, привязанных к этой задаче
     final snapshot =
         await FirebaseFirestore.instance
             .collection('responses')
@@ -25,39 +24,36 @@ class TaskResponseScreen extends StatelessWidget {
             .get();
 
     final usersRef = FirebaseFirestore.instance.collection('users');
+    final chatsRef = FirebaseFirestore.instance.collection('chats');
 
-    // 2. Параллельно для каждого документа "response" получаем информацию о юзере
     final responsesWithUserData = await Future.wait(
       snapshot.docs.map((doc) async {
         final data = doc.data();
-
-        // Предположим, что в документе есть поле "respondent" (UID пользователя)
         final String userId = data['respondent'] as String? ?? '';
 
-        // 2.1. Загружаем документ пользователя
-        final DocumentSnapshot userDoc = await usersRef.doc(userId).get();
-        final userData =
-            userDoc.data() as Map<String, dynamic>? ?? <String, dynamic>{};
+        final userDoc = await usersRef.doc(userId).get();
+        final userData = userDoc.data() ?? {};
 
-        // Составляем итоговую карту для отображения
-        return <String, dynamic>{
-          // Аватар пользователя (если пусто, можно будет показать дефолт)
+        // Запрос чата по order_id
+        final chatQuerySnapshot =
+            await chatsRef.where('order_id', isEqualTo: taskId).limit(1).get();
+
+        String chatId = '';
+        if (chatQuerySnapshot.docs.isNotEmpty) {
+          chatId = chatQuerySnapshot.docs.first.id;
+        }
+
+        return {
           'photo': userData['image_url'] as String? ?? '',
-          // Берём firstName/lastName из профиля юзера (если их нет, ставим "Без имени")
           'firstName': userData['firstName'] as String? ?? '',
           'lastName': userData['lastName'] as String? ?? '',
-          // Дата отклика: используем поле "created_time" (ms unix), форматируем ниже
           'created_at': _formatDate(data['created_time']),
-          // Рейтинг (откликнувшегося) из поля "respondent_rating"
           'rating': data['respondent_rating'] as int? ?? 0,
-          // Текст сопроводительного письма (cover_letter)
           'text': data['cover_letter'] as String? ?? '',
-
-          // ID документа отклика (нужно, чтобы потом открыть чат по roomUUID)
+          'roomUUID': chatId, // Добавили chatId
         };
       }),
     );
-    print(taskId);
 
     return responsesWithUserData;
   }
