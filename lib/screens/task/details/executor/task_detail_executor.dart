@@ -1,3 +1,4 @@
+// chats_screen.dart
 import 'package:auto_route/auto_route.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
@@ -25,16 +26,25 @@ class _TaskDetailExecutorScreenState extends State<TaskDetailExecutorScreen> {
 
   String get _uid => FirebaseAuth.instance.currentUser?.uid ?? '';
 
+  /// Проверка, является ли текущий пользователь исполнителем
   bool get _iAmWorker {
     final List workers = task?['workers'] ?? [];
     return workers.contains(_uid);
   }
 
-  /// «читаемый» статус, вычисленный из полей
+  /// Локальные флаги статусов
   late String statusReadable;
   bool isSearching = false;
   bool isInWork = false;
   bool isClosed = false;
+
+  /// Флаг: уже ли текущий пользователь оставлял отклик (есть ли он в массиве 'responses')
+  bool get _hasResponded {
+    final List responses = task?['responses'] ?? [];
+    // Предположим, что в поле 'responses' лежит список UID пользователей,
+    // уже отправлявших отклик. Если структура другая, измените условие проверки.
+    return responses.contains(_uid);
+  }
 
   @override
   void initState() {
@@ -56,6 +66,7 @@ class _TaskDetailExecutorScreenState extends State<TaskDetailExecutorScreen> {
     setState(() => isLoading = false);
   }
 
+  /// Пересчитываем статус (по наличию исполнителей и дате закрытия)
   void _computeStatus() {
     final hasClosed = task?['closed_date'] != null;
     final hasWorkers = (task?['workers'] ?? []).isNotEmpty;
@@ -81,10 +92,10 @@ class _TaskDetailExecutorScreenState extends State<TaskDetailExecutorScreen> {
       return const Scaffold(body: Center(child: Text('Задание не найдено')));
     }
 
-    // короткие ссылки
+    // Короткие ссылки на списки внутри документа
     final List addInfo = task!['additional'] ?? [];
-    final List responses = task!['responses'] ?? [];
     final List workers = task!['workers'] ?? [];
+    final List responses = task!['responses'] ?? [];
 
     return Scaffold(
       body: Container(
@@ -122,6 +133,7 @@ class _TaskDetailExecutorScreenState extends State<TaskDetailExecutorScreen> {
                     ),
                   ),
                   const Square(),
+                  // описание
                   Text(
                     task!['description'] ?? '',
                     style: const TextStyle(fontSize: 14, color: Colors.grey),
@@ -135,11 +147,6 @@ class _TaskDetailExecutorScreenState extends State<TaskDetailExecutorScreen> {
                     hasBottomBorder: true,
                   ),
                   InfoRow(
-                    label: 'Оплата',
-                    value: task!['payment_for'] ?? '',
-                    hasBottomBorder: true,
-                  ),
-                  InfoRow(
                     label: 'Дата начала',
                     value: (task!['begin_at'] ?? '').toString(),
                     hasBottomBorder: true,
@@ -147,11 +154,6 @@ class _TaskDetailExecutorScreenState extends State<TaskDetailExecutorScreen> {
                   InfoRow(
                     label: 'Адрес',
                     value: task!['address'] ?? '',
-                    hasBottomBorder: true,
-                  ),
-                  InfoRow(
-                    label: 'Lat / Lng',
-                    value: '${task!['lat'] ?? '-'}, ${task!['lng'] ?? '-'}',
                     hasBottomBorder: true,
                   ),
                   InfoRow(
@@ -164,31 +166,6 @@ class _TaskDetailExecutorScreenState extends State<TaskDetailExecutorScreen> {
                     value: '${responses.length}',
                     hasBottomBorder: true,
                   ),
-                  InfoRow(
-                    label: 'Исполнители',
-                    value: '${workers.length}',
-                    hasBottomBorder: true,
-                  ),
-                  // дополнительная информация
-                  if (addInfo.isNotEmpty) ...[
-                    const Square(),
-                    const Text(
-                      'Дополнительно:',
-                      style: TextStyle(
-                        fontWeight: FontWeight.bold,
-                        fontSize: 14,
-                      ),
-                    ),
-                    const Square(height: 4),
-                    for (var item in addInfo)
-                      Padding(
-                        padding: const EdgeInsets.only(bottom: 2),
-                        child: Text(
-                          '• $item',
-                          style: const TextStyle(color: Colors.grey),
-                        ),
-                      ),
-                  ],
                 ],
               ),
             ),
@@ -197,8 +174,11 @@ class _TaskDetailExecutorScreenState extends State<TaskDetailExecutorScreen> {
             const Spacer(),
 
             //------------------ actions -------------------
-            if (isSearching) ...[
-              // «Поиск исполнителя»
+
+            // 1) Статус "Поиск исполнителя":
+            //    показываем кнопки «Отказаться/Согласиться», но только если текущий пользователь
+            //    еще не отправлял отклик (!_hasResponded) и сам не является исполнителем.
+            if (isSearching && !_hasResponded && !_iAmWorker) ...[
               Row(
                 children: [
                   Expanded(
@@ -206,7 +186,8 @@ class _TaskDetailExecutorScreenState extends State<TaskDetailExecutorScreen> {
                       text: 'Отказаться',
                       theme: 'white',
                       onPressed: () {
-                        /* TODO */
+                        // Здесь можно просто ничего не делать или закрыть экран.
+                        Navigator.of(context).pop();
                       },
                     ),
                   ),
@@ -221,8 +202,9 @@ class _TaskDetailExecutorScreenState extends State<TaskDetailExecutorScreen> {
                   ),
                 ],
               ),
-            ] else if (isInWork && _iAmWorker) ...[
-              // «В работе» – только для текущего исполнителя
+            ]
+            // 2) Если статус «В работе» и текущий пользователь — назначенный исполнитель, показываем кнопку «Подтвердить выполнение»
+            else if (isInWork && _iAmWorker) ...[
               SizedBox(
                 width: double.infinity,
                 child: Btn(
@@ -231,8 +213,17 @@ class _TaskDetailExecutorScreenState extends State<TaskDetailExecutorScreen> {
                   onPressed: () => openResponseModal(context, widget.taskId),
                 ),
               ),
+            ]
+            // 3) Во всех остальных случаях (либо «Завершено», либо уже откликнулись) — можно показать поясняющий текст
+            else if (isSearching && _hasResponded) ...[
+              Center(
+                child: Text(
+                  'Вы уже отправили отклик',
+                  style: TextStyle(color: Colors.grey[600]),
+                ),
+              ),
             ],
-            // при статусе «Завершено» — кнопок нет
+
             const Square(height: 32),
           ],
         ),

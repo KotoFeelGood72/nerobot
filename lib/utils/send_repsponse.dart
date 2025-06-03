@@ -19,8 +19,6 @@ void openResponseModal(BuildContext context, String taskId) {
   );
 }
 
-/* ----------------------------- BODY ------------------------------------ */
-
 class _ModalBody extends StatefulWidget {
   const _ModalBody({required this.taskId, required this.controller});
 
@@ -34,82 +32,110 @@ class _ModalBody extends StatefulWidget {
 class _ModalBodyState extends State<_ModalBody> {
   bool _sending = false;
 
+  /// Принимает текст отклика, обновляет массив responses в документе заказа
+  /// и создаёт отдельный документ в коллекции "responses" с полной информацией.
   Future<void> _send() async {
-    final text = widget.controller.text.trim();
+    final String text = widget.controller.text.trim();
     if (text.isEmpty) return;
 
     setState(() => _sending = true);
 
     try {
-      final uid = FirebaseAuth.instance.currentUser!.uid;
-      final orderRef = FirebaseFirestore.instance
+      final String uid = FirebaseAuth.instance.currentUser!.uid;
+
+      // 1. Ссылки на коллекцию "orders" и нужный документ заказа:
+      final DocumentReference<Map<String, dynamic>> orderRef = FirebaseFirestore
+          .instance
           .collection('orders')
           .doc(widget.taskId);
-      final orderSnap = await orderRef.get();
-      if (!orderSnap.exists) throw 'Задание не найдено';
 
-      final creatorId = orderSnap.data()!['creator'] as String?;
+      // Загружаем документ заказа, чтобы взять оттуда creator:
+      final DocumentSnapshot<Map<String, dynamic>> orderSnap =
+          await orderRef.get();
+      if (!orderSnap.exists) {
+        throw 'Задание не найдено';
+      }
 
-      /* ---- 1. Обновляем responses у задачи ---- */
+      // Получаем UID создателя заказа
+      final String? creatorId = orderSnap.data()!['creator'] as String?;
+
+      // Текущий timestamp в миллисекундах:
+      final int nowMs = DateTime.now().millisecondsSinceEpoch;
+
+      // 2. Обновляем поле "responses" в документе заказа (добавляем uid)
       await orderRef.update({
         'responses': FieldValue.arrayUnion([uid]),
       });
 
-      /* ---- 2. Создаём (или берём существующий) чат ---- */
-      final chats = FirebaseFirestore.instance.collection('chats');
+      // 3. Создаём новый документ в коллекции "responses"
+      // в соответствии со структурой, показанной на скриншоте:
+      await FirebaseFirestore.instance.collection('responses').add({
+        'order': widget.taskId, // ID заказа
+        'order_creator': creatorId ?? '', // UID создателя (клиента)
+        'respondent': uid, // UID пользователя, откликающегося
+        'cover_letter': text, // Текст отклика
+        'respondent_rating': 0, // Начальный рейтинг откликнувшегося
+        'created_time': nowMs, // Временная метка (ms)
+        'created_date': nowMs, // Если нужно хранить дату отдельно
+        'active': true, // По умолчанию true (или ваше значение)
+        'hidden': false, // По умолчанию false (или ваше значение)
+      });
 
-      // ищем чат, где эта задача и уже есть текущий пользователь
-      final prev =
-          await chats
+      if (!mounted) return;
+
+      // Закрываем модалку и показываем SnackBar
+      Navigator.of(context).pop();
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(const SnackBar(content: Text('Отклик отправлен')));
+
+      // 4. Очищаем форму (необязательно, ведь мы закрыли модалку)
+      widget.controller.clear();
+
+      // 5. Переходим сразу в чат — проверяем, есть ли чат для этого заказа + participants
+      final CollectionReference<Map<String, dynamic>> chatsRef =
+          FirebaseFirestore.instance.collection('chats');
+
+      // Сначала пробуем найти уже существующий чат по условию:
+      // order_id == taskId  AND  participants arrayContains uid
+      final QuerySnapshot<Map<String, dynamic>> prevChats =
+          await chatsRef
               .where('order_id', isEqualTo: widget.taskId)
               .where('participants', arrayContains: uid)
               .limit(1)
               .get();
 
-      late String chatId;
-
-      if (prev.docs.isNotEmpty) {
-        // чат уже был — добавим сообщение
-        final doc = prev.docs.first;
-        chatId = doc.id;
-        await chats.doc(chatId).update({
+      String chatId;
+      if (prevChats.docs.isNotEmpty) {
+        // Чат уже есть, просто добавляем сообщение туда
+        final DocumentSnapshot<Map<String, dynamic>> chatDoc =
+            prevChats.docs.first;
+        chatId = chatDoc.id;
+        await chatsRef.doc(chatId).update({
           'messages': FieldValue.arrayUnion([
-            {
-              'sender': uid,
-              'text': text,
-              'date_time': DateTime.now().millisecondsSinceEpoch,
-            },
+            {'sender': uid, 'text': text, 'date_time': nowMs},
           ]),
         });
       } else {
-        // создаём новый чат
-        final doc = await chats.add({
-          'order_id': widget.taskId,
-          'created_date': DateTime.now().millisecondsSinceEpoch,
-          'messages': [
-            {
-              'sender': uid,
-              'text': text,
-              'date_time': DateTime.now().millisecondsSinceEpoch,
-            },
-          ],
-          'participants': [if (creatorId != null) creatorId, uid],
-        });
-        chatId = doc.id;
+        // Чата ещё не было — создаём новый
+        final DocumentReference<Map<String, dynamic>> newChatDoc =
+            await chatsRef.add({
+              'order_id': widget.taskId,
+              'created_date': nowMs,
+              'messages': [
+                {'sender': uid, 'text': text, 'date_time': nowMs},
+              ],
+              'participants': [if (creatorId != null) creatorId, uid],
+            });
+        chatId = newChatDoc.id;
       }
 
-      if (!mounted) return;
-      Navigator.of(context).pop(); // закрываем модалку
-
-      ScaffoldMessenger.of(
-        context,
-      ).showSnackBar(const SnackBar(content: Text('Отклик отправлен')));
-
-      // переходим в чат
+      // 6. Переходим на экран чата
       AutoRouter.of(
         context,
       ).push(ChatsRoute(chatsId: chatId, taskId: widget.taskId));
     } catch (e) {
+      // Показ ошибки, если что-то пошло не так
       if (mounted) {
         ScaffoldMessenger.of(
           context,

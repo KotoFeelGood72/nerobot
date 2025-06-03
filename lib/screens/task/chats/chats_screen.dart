@@ -15,48 +15,96 @@ class ChatsScreen extends StatelessWidget {
   final String chatsId;
   final String taskId;
 
-  // ───────────────── helpers ─────────────────
+  /// Поток для чтения документа чата
   Stream<DocumentSnapshot<Map<String, dynamic>>> get _chatStream =>
       FirebaseFirestore.instance.collection('chats').doc(chatsId).snapshots();
 
+  /// Получаем UID текущего пользователя
+  String? get _myUid => FirebaseAuth.instance.currentUser?.uid;
+
+  /// Функция, которая возвращает имя «другого» участника чата (то есть того, чей UID
+  /// не совпадает с _myUid). Если такого нет, возвращаем просто «Чат».
   Future<String> _chatTitle() async {
-    final uid = FirebaseAuth.instance.currentUser?.uid;
-    final snap =
+    if (_myUid == null) return 'Чат';
+
+    // Сначала достаём документ чата (чтобы узнать, кто там участвует)
+    final chatSnap =
         await FirebaseFirestore.instance.collection('chats').doc(chatsId).get();
-    final List parts = snap.data()?['participants'] ?? [];
-    return parts.firstWhere((p) => p != uid, orElse: () => 'Чат');
+
+    if (!chatSnap.exists) {
+      return 'Чат';
+    }
+
+    final data = chatSnap.data();
+    final List participants = data?['participants'] ?? [];
+
+    // Ищем первого участника, чей UID != _myUid
+    final otherUid = participants.firstWhere(
+      (p) => p != _myUid,
+      orElse: () => null,
+    );
+
+    if (otherUid == null) {
+      return 'Чат';
+    }
+
+    // Теперь по UID другого участника читаем его данные из коллекции 'users'
+    final userSnap =
+        await FirebaseFirestore.instance
+            .collection('users')
+            .doc(otherUid)
+            .get();
+
+    if (!userSnap.exists) {
+      return 'Чат';
+    }
+
+    final userData = userSnap.data();
+    final String firstName = userData?['firstName'] ?? '';
+    final String lastName = userData?['lastName'] ?? '';
+
+    // Если вдруг имя или фамилия пусты, просто вернём «Чат»
+    if (firstName.isEmpty && lastName.isEmpty) {
+      return 'Чат';
+    }
+
+    return '$firstName $lastName';
   }
 
   @override
   Widget build(BuildContext context) {
-    final uid = FirebaseAuth.instance.currentUser?.uid;
-
     return Scaffold(
       appBar: AppBar(
+        // Заголовок через FutureBuilder: пока ждём имени – показываем «Загрузка…»
         title: FutureBuilder<String>(
           future: _chatTitle(),
-          builder:
-              (_, s) => Text(
-                s.data ??
-                    (s.connectionState == ConnectionState.waiting
-                        ? 'Загрузка…'
-                        : 'Чат'),
-              ),
+          builder: (context, snapshot) {
+            if (snapshot.connectionState == ConnectionState.waiting) {
+              return const Text('Загрузка…');
+            }
+            if (snapshot.hasError) {
+              return const Text('Чат');
+            }
+            // snapshot.data может быть null (если, например, участник не найден)
+            final titleText = snapshot.data ?? 'Чат';
+            return Text(titleText);
+          },
         ),
         actions: [
+          // При клике на «i» переходим на экран с деталями задачи,
+          // передавая taskId
           IconButton(
             icon: const Icon(Icons.info_outline_rounded),
-            onPressed:
-                () => AutoRouter.of(
-                  context,
-                ).push(TaskDetailCustomerRoute(taskId: taskId)),
+            onPressed: () {
+              AutoRouter.of(context).push(TaskDetailRoute(taskId: taskId));
+            },
           ),
         ],
       ),
 
       body: Column(
         children: [
-          // ---------- сообщения ----------
+          // ---------- Сообщения ----------
           Expanded(
             child: StreamBuilder<DocumentSnapshot<Map<String, dynamic>>>(
               stream: _chatStream,
@@ -64,13 +112,17 @@ class ChatsScreen extends StatelessWidget {
                 if (snap.connectionState == ConnectionState.waiting) {
                   return const Center(child: CircularProgressIndicator());
                 }
-                final data = snap.data?.data();
+                if (!snap.hasData || !snap.data!.exists) {
+                  return const Center(child: Text('Чат не найден'));
+                }
+
+                final data = snap.data!.data();
                 final List msgs =
                     (data?['messages'] ?? [])..sort(
-                      // newest first
-                      (a, b) =>
-                          (b['date_time'] as num).compareTo(a['date_time']),
-                    );
+                      (a, b) => (b['date_time'] as num).compareTo(
+                        a['date_time'] as num,
+                      ),
+                    ); // новейшие сверху
 
                 if (msgs.isEmpty) {
                   return const Center(child: Text('Нет сообщений'));
@@ -79,19 +131,17 @@ class ChatsScreen extends StatelessWidget {
                 return ListView.builder(
                   reverse: true,
                   itemCount: msgs.length,
-                  itemBuilder: (_, i) {
-                    final m = msgs[i] as Map<String, dynamic>;
-                    return MessageBubble(
-                      message: m,
-                      isMine: m['sender'] == uid,
-                    );
+                  itemBuilder: (context, index) {
+                    final m = msgs[index] as Map<String, dynamic>;
+                    final isMine = m['sender'] == _myUid;
+                    return MessageBubble(message: m, isMine: isMine);
                   },
                 );
               },
             ),
           ),
 
-          // ---------- ввод ----------
+          // ---------- Поле ввода нового сообщения ----------
           MessageInput(chatId: chatsId, orderId: taskId),
         ],
       ),

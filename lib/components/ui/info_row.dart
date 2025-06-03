@@ -51,6 +51,8 @@ class InfoRow extends StatelessWidget {
               )
               : Row(
                 mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                crossAxisAlignment: CrossAxisAlignment.start,
+                spacing: 10,
                 children: [
                   Text(
                     label,
@@ -59,7 +61,15 @@ class InfoRow extends StatelessWidget {
                       fontSize: 16,
                     ),
                   ),
-                  Text(value, style: const TextStyle(fontSize: 14)),
+                  Flexible(
+                    child: Text(
+                      value,
+                      style: const TextStyle(fontSize: 14),
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      textAlign: TextAlign.right,
+                    ),
+                  ),
                 ],
               ),
     );
