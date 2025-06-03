@@ -610,23 +610,51 @@ class _TaskScreenState extends State<TaskScreen> {
     ),
   );
 
+  // void _onTaskTap(Map<String, dynamic> task) async {
+  //   final orderId = task['id'].toString();
+
+  //   if (role == 'worker' && _currentFilter == 'open') {
+  //     // гарантируем, что есть chatId
+  //     final chatId = await _getOrCreateChat(orderId);
+
+  //     if (!mounted) return;
+  //     AutoRouter.of(context).push(ChatsRoute(chatsId: chatId, taskId: orderId));
+  //     return;
+  //   }
+
+  //   /* остальные ветки не трогали */
+  //   if (role == 'worker') {
+  //     AutoRouter.of(context).push(TaskDetailRoute(taskId: orderId));
+  //   } else {
+  //     AutoRouter.of(context).push(TaskResponseRoute(taskId: orderId));
+  //   }
+  // }
+
   void _onTaskTap(Map<String, dynamic> task) async {
     final orderId = task['id'].toString();
 
     if (role == 'worker' && _currentFilter == 'open') {
-      // гарантируем, что есть chatId
       final chatId = await _getOrCreateChat(orderId);
-
       if (!mounted) return;
       AutoRouter.of(context).push(ChatsRoute(chatsId: chatId, taskId: orderId));
       return;
     }
 
-    /* остальные ветки не трогали */
     if (role == 'worker') {
       AutoRouter.of(context).push(TaskDetailRoute(taskId: orderId));
-    } else {
-      AutoRouter.of(context).push(TaskResponseRoute(taskId: orderId));
+      return;
     }
+
+    // ------- ДОБАВЛЕНО: customer → если есть исполнители, открыть чат --------
+    final List workers = (task['workers'] ?? []) as List;
+    if (role == 'customer' && workers.isNotEmpty) {
+      final chatId = await _getOrCreateChat(orderId);
+      if (!mounted) return;
+      AutoRouter.of(context).push(ChatsRoute(chatsId: chatId, taskId: orderId));
+      return;
+    }
+
+    // ------- иначе: открываем экран откликов --------
+    AutoRouter.of(context).push(TaskResponseRoute(taskId: orderId));
   }
 }

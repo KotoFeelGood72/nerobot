@@ -27,14 +27,30 @@ class ChatsScreen extends StatelessWidget {
 
     if (myUid == null) return;
 
-    // Читаем роль из Firestore
     final userDoc =
         await FirebaseFirestore.instance.collection('users').doc(myUid).get();
     final role = userDoc.data()?['type'] as String? ?? '';
 
     if (role == 'customer') {
-      print('Good');
-      AutoRouter.of(context).push(TaskDetailCustomerRoute(taskId: taskId));
+      final chatSnap =
+          await FirebaseFirestore.instance
+              .collection('chats')
+              .doc(chatsId)
+              .get();
+
+      final List participants = chatSnap.data()?['participants'] ?? [];
+      final respondentUid = participants.firstWhere(
+        (uid) => uid != myUid,
+        orElse: () => myUid,
+      );
+
+      print('respondentUid $respondentUid');
+
+      if (respondentUid != null) {
+        AutoRouter.of(context).push(
+          TaskDetailCustomerRoute(taskId: taskId, respondent: respondentUid),
+        );
+      }
     } else {
       AutoRouter.of(context).push(TaskDetailRoute(taskId: taskId));
     }

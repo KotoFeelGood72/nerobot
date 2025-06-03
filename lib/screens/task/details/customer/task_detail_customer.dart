@@ -12,8 +12,13 @@ import 'package:intl/intl.dart'; // для форматирования даты
 @RoutePage()
 class TaskDetailCustomerScreen extends StatefulWidget {
   final String taskId;
+  final String? respondent;
 
-  const TaskDetailCustomerScreen({super.key, required this.taskId});
+  const TaskDetailCustomerScreen({
+    super.key,
+    required this.taskId,
+    this.respondent,
+  });
 
   @override
   State<TaskDetailCustomerScreen> createState() =>
@@ -37,6 +42,27 @@ class _TaskDetailCustomerScreenState extends State<TaskDetailCustomerScreen> {
       'text': text,
       'createdAt': FieldValue.serverTimestamp(),
     });
+  }
+
+  Future<void> _confirmWorker() async {
+    if (widget.respondent == null) return;
+
+    final docRef = FirebaseFirestore.instance
+        .collection('orders')
+        .doc(widget.taskId);
+
+    await docRef.update({
+      'workers': [widget.respondent],
+      'responses': [],
+      'status': 'working',
+    });
+
+    if (mounted) {
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(const SnackBar(content: Text('Исполнитель утверждён')));
+      setState(() {});
+    }
   }
 
   /// Открываем модальное с вводом комментария
@@ -145,7 +171,7 @@ class _TaskDetailCustomerScreenState extends State<TaskDetailCustomerScreen> {
           final List<dynamic>? workersList = task['workers'] as List<dynamic>?;
           final bool hasExecutor =
               workersList != null && workersList.isNotEmpty;
-
+          print(widget.taskId);
           return Padding(
             padding: const EdgeInsets.all(16),
             child: Column(
@@ -221,7 +247,7 @@ class _TaskDetailCustomerScreenState extends State<TaskDetailCustomerScreen> {
                       if (hasExecutor) ...[
                         InfoRow(
                           label: 'Исполнитель',
-                          value: workersList!.join(', '),
+                          value: workersList.join(', '),
                           hasBottomBorder: true,
                         ),
                       ],
@@ -229,23 +255,29 @@ class _TaskDetailCustomerScreenState extends State<TaskDetailCustomerScreen> {
                   ),
                 ),
 
-                // Если нет исполнителя — добавляем небольшой отступ,
-                // чтобы кнопка не прилипала к карточке
-                if (!hasExecutor) const SizedBox(height: 32),
+                Padding(
+                  padding: const EdgeInsets.all(16),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.stretch,
+                    children: [
+                      // const Spacer(),
+                      if (widget.respondent != null && !hasExecutor)
+                        Btn(
+                          text: 'Утвердить исполнителя',
+                          theme: 'violet',
+                          onPressed: _confirmWorker,
+                        )
+                      else if (hasExecutor)
+                        Btn(
+                          text: 'Подтвердить выполнение',
+                          theme: 'violet',
+                          onPressed: () => _openResponseModal(context),
+                        ),
 
-                // --- Кнопка «Подтвердить выполнение» только если исполнитель назначен ---
-                if (hasExecutor) ...[
-                  const Spacer(),
-                  SizedBox(
-                    width: double.infinity,
-                    child: Btn(
-                      text: 'Подтвердить выполнение',
-                      theme: 'violet',
-                      onPressed: () => _openResponseModal(context),
-                    ),
+                      const Square(height: 32),
+                    ],
                   ),
-                  const Square(height: 32),
-                ],
+                ),
               ],
             ),
           );

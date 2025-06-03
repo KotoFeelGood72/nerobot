@@ -490,10 +490,15 @@ class TaskDetailCustomerRoute
   TaskDetailCustomerRoute({
     _i25.Key? key,
     required String taskId,
+    String? respondent,
     List<_i24.PageRouteInfo>? children,
   }) : super(
          TaskDetailCustomerRoute.name,
-         args: TaskDetailCustomerRouteArgs(key: key, taskId: taskId),
+         args: TaskDetailCustomerRouteArgs(
+           key: key,
+           taskId: taskId,
+           respondent: respondent,
+         ),
          initialChildren: children,
        );
 
@@ -503,32 +508,44 @@ class TaskDetailCustomerRoute
     name,
     builder: (data) {
       final args = data.argsAs<TaskDetailCustomerRouteArgs>();
-      return _i18.TaskDetailCustomerScreen(key: args.key, taskId: args.taskId);
+      return _i18.TaskDetailCustomerScreen(
+        key: args.key,
+        taskId: args.taskId,
+        respondent: args.respondent,
+      );
     },
   );
 }
 
 class TaskDetailCustomerRouteArgs {
-  const TaskDetailCustomerRouteArgs({this.key, required this.taskId});
+  const TaskDetailCustomerRouteArgs({
+    this.key,
+    required this.taskId,
+    this.respondent,
+  });
 
   final _i25.Key? key;
 
   final String taskId;
 
+  final String? respondent;
+
   @override
   String toString() {
-    return 'TaskDetailCustomerRouteArgs{key: $key, taskId: $taskId}';
+    return 'TaskDetailCustomerRouteArgs{key: $key, taskId: $taskId, respondent: $respondent}';
   }
 
   @override
   bool operator ==(Object other) {
     if (identical(this, other)) return true;
     if (other is! TaskDetailCustomerRouteArgs) return false;
-    return key == other.key && taskId == other.taskId;
+    return key == other.key &&
+        taskId == other.taskId &&
+        respondent == other.respondent;
   }
 
   @override
-  int get hashCode => key.hashCode ^ taskId.hashCode;
+  int get hashCode => key.hashCode ^ taskId.hashCode ^ respondent.hashCode;
 }
 
 /// generated route for
