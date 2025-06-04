@@ -6,6 +6,7 @@ import 'package:nerobot/components/ui/Divider.dart';
 import 'package:nerobot/components/ui/Inputs.dart';
 import 'package:nerobot/components/ui/info_row.dart';
 import 'package:nerobot/constants/app_colors.dart';
+import 'package:nerobot/router/app_router.gr.dart';
 import 'package:nerobot/utils/modal_utils.dart';
 import 'package:intl/intl.dart'; // для форматирования даты
 
@@ -42,6 +43,26 @@ class _TaskDetailCustomerScreenState extends State<TaskDetailCustomerScreen> {
       'text': text,
       'createdAt': FieldValue.serverTimestamp(),
     });
+  }
+
+  Future<void> _confirmSuccess() async {
+    final docRef = FirebaseFirestore.instance
+        .collection('orders')
+        .doc(widget.taskId);
+    try {
+      await docRef.update({'status': 'success'});
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Статус изменён на Success')),
+        );
+        // Переходим на TaskRoute
+        context.router.replace(const TaskRoute());
+      }
+    } catch (e) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Ошибка при обновлении статуса: $e')),
+      );
+    }
   }
 
   Future<void> _confirmWorker() async {
@@ -154,24 +175,20 @@ class _TaskDetailCustomerScreenState extends State<TaskDetailCustomerScreen> {
           }
 
           final task = snapshot.data!;
-
-          // Реальное название задачи в документе 'orders' хранится в поле 'title'
+          // Достаём нужные поля
           final String title = task['title'] ?? '';
-          // Описание задачи
           final String description = task['description'] ?? '';
-          // Стоимость
           final int price = (task['price'] is int) ? task['price'] as int : 0;
-          // Время начала (ms)
           final int? beginAt = task['begin_at'] as int?;
-          // Адрес
           final String address = task['address'] ?? '';
-          // Булево поле: активен ли заказ
           final bool isActive = task['active'] as bool? ?? false;
-          // Список исполнителей (UID'ы) — если непустой, значит исполнитель назначен
+
+          // Список исполнителей и статус
           final List<dynamic>? workersList = task['workers'] as List<dynamic>?;
           final bool hasExecutor =
               workersList != null && workersList.isNotEmpty;
-          print(widget.taskId);
+          final String? status = task['status'] as String?;
+
           return Padding(
             padding: const EdgeInsets.all(16),
             child: Column(
@@ -194,7 +211,7 @@ class _TaskDetailCustomerScreenState extends State<TaskDetailCustomerScreen> {
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      // Название задачи (title)
+                      // Название задачи
                       Text(
                         title,
                         style: const TextStyle(
@@ -202,9 +219,9 @@ class _TaskDetailCustomerScreenState extends State<TaskDetailCustomerScreen> {
                           fontWeight: FontWeight.bold,
                         ),
                       ),
-                      const Square(),
+                      const SizedBox(height: 16),
 
-                      // Описание задачи (description)
+                      // Описание задачи
                       Text(
                         description,
                         style: const TextStyle(
@@ -212,7 +229,7 @@ class _TaskDetailCustomerScreenState extends State<TaskDetailCustomerScreen> {
                           color: Colors.grey,
                         ),
                       ),
-                      const Square(height: 32),
+                      const SizedBox(height: 32),
 
                       // Стоимость
                       InfoRow(
@@ -222,7 +239,7 @@ class _TaskDetailCustomerScreenState extends State<TaskDetailCustomerScreen> {
                         hasBottomBorder: true,
                       ),
 
-                      // Дата/время начала (begin_at)
+                      // Дата/время начала
                       InfoRow(
                         label: 'Дата начала',
                         value: _formatTimestamp(beginAt),
@@ -236,18 +253,18 @@ class _TaskDetailCustomerScreenState extends State<TaskDetailCustomerScreen> {
                         hasBottomBorder: true,
                       ),
 
-                      // Статус (active = true/false)
+                      // Статус (active)
                       InfoRow(
                         label: 'Статус',
                         value: isActive ? 'Активен' : 'Не активен',
                         hasBottomBorder: true,
                       ),
 
-                      // Если есть исполнитель — выводим его UID (или весь список UID’ов)
+                      // Если есть исполнитель — выводим его UID
                       if (hasExecutor) ...[
                         InfoRow(
                           label: 'Исполнитель',
-                          value: workersList.join(', '),
+                          value: workersList!.join(', '),
                           hasBottomBorder: true,
                         ),
                       ],
@@ -255,29 +272,25 @@ class _TaskDetailCustomerScreenState extends State<TaskDetailCustomerScreen> {
                   ),
                 ),
 
-                Padding(
-                  padding: const EdgeInsets.all(16),
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.stretch,
-                    children: [
-                      // const Spacer(),
-                      if (widget.respondent != null && !hasExecutor)
-                        Btn(
-                          text: 'Утвердить исполнителя',
-                          theme: 'violet',
-                          onPressed: _confirmWorker,
-                        )
-                      else if (hasExecutor)
-                        Btn(
-                          text: 'Подтвердить выполнение',
-                          theme: 'violet',
-                          onPressed: () => _openResponseModal(context),
-                        ),
+                const SizedBox(height: 24),
 
-                      const Square(height: 32),
-                    ],
-                  ),
-                ),
+                // --- Блок с кнопками, но только если статус != "success" ---
+                if (status != 'success') ...[
+                  if (widget.respondent != null && !hasExecutor) ...[
+                    Btn(
+                      text: 'Утвердить исполнителя',
+                      theme: 'violet',
+                      onPressed: _confirmWorker,
+                    ),
+                  ] else if (hasExecutor) ...[
+                    Btn(
+                      text: 'Подтвердить выполнение',
+                      theme: 'violet',
+                      onPressed: _confirmSuccess,
+                    ),
+                  ],
+                  const SizedBox(height: 32),
+                ],
               ],
             ),
           );

@@ -26,6 +26,15 @@
 	<string>$(FLUTTER_BUILD_NUMBER)</string>
 	<key>LSRequiresIPhoneOS</key>
 	<true/>
+
+	<!-- Отключаем проксирование AppDelegate (FirebaseAppDelegateProxyEnabled = false) -->
+	<key>FirebaseAppDelegateProxyEnabled</key>
+	<false/>
+
+	<!-- Описание, зачем нужны уведомления -->
+	<key>NSUserNotificationUsageDescription</key>
+	<string>Нужно разрешение для отображения пуш-уведомлений.</string>
+
 	<key>MKDirectionsApplicationSupportedModes</key>
 	<array/>
 	<key>UIApplicationSupportsIndirectInputEvents</key>

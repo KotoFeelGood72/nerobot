@@ -1,5 +1,9 @@
+import 'dart:io';
+
 import 'package:firebase_core/firebase_core.dart';
+import 'package:firebase_messaging/firebase_messaging.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter_local_notifications/flutter_local_notifications.dart';
 import 'package:get_it/get_it.dart';
 import 'package:intl/date_symbol_data_local.dart';
 import 'package:nerobot/constants/app_colors.dart';
@@ -9,11 +13,63 @@ import 'package:nerobot/themes/text_themes.dart';
 
 final getIt = GetIt.instance;
 
+/// 1. Фоновый хендлер — всегда должен быть top-level (не внутри класса)
+Future<void> _firebaseMessagingBackgroundHandler(RemoteMessage message) async {
+  // Это будет вызвано, когда пуш придёт в фоне (app killed или background).
+  await Firebase.initializeApp(options: DefaultFirebaseOptions.currentPlatform);
+  debugPrint('📥 Получено фоновое сообщение: ${message.messageId}');
+  // Здесь можно показать локальное уведомление или обработать данные.
+}
+
+/// 2. Локальный notifications-плагин (для отображения пушей в foreground)
+final FlutterLocalNotificationsPlugin _flutterLocalNotificationsPlugin =
+    FlutterLocalNotificationsPlugin();
+
+/// 3. Конфигурация для Android Notification Channel
+const AndroidNotificationChannel _highImportanceChannel =
+    AndroidNotificationChannel(
+      'high_importance_channel', // id
+      'High Importance Notifications', // title
+      description: 'Этот канал используется для уведомлений высокой важности.',
+      importance: Importance.high,
+    );
+
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
   getIt.registerSingleton<AppRouter>(AppRouter());
   await Firebase.initializeApp(options: DefaultFirebaseOptions.currentPlatform);
   await initializeDateFormatting('ru_RU', null);
+
+  // 4. Регистрируем фоновый хендлер
+  FirebaseMessaging.onBackgroundMessage(_firebaseMessagingBackgroundHandler);
+
+  // 5. Инициализируем локальный плагин
+  if (Platform.isAndroid) {
+    // Для Android: создаём канал до инициализации плагина
+    await _flutterLocalNotificationsPlugin
+        .resolvePlatformSpecificImplementation<
+          AndroidFlutterLocalNotificationsPlugin
+        >()
+        ?.createNotificationChannel(_highImportanceChannel);
+  }
+
+  // 6. Настраиваем локальное уведомление (когда придёт пуш в foreground)
+  const androidSettings = AndroidInitializationSettings('@mipmap/ic_launcher');
+  const iosSettings = DarwinInitializationSettings();
+  final initSettings = InitializationSettings(
+    android: androidSettings,
+    iOS: iosSettings,
+  );
+
+  await _flutterLocalNotificationsPlugin.initialize(
+    initSettings,
+    onDidReceiveNotificationResponse: (NotificationResponse response) {
+      // Эта коллбэк будет вызвана, когда пользователь тапнет на пуш (foreground)
+      debugPrint('🖱 Notification tapped: ${response.payload}');
+      // Здесь можно навигировать куда-то же в приложении
+    },
+  );
+
   runApp(MyApp());
 }
 

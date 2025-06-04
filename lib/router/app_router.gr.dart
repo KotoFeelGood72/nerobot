@@ -11,6 +11,7 @@
 // ignore_for_file: no_leading_underscores_for_library_prefixes
 import 'package:auto_route/auto_route.dart' as _i24;
 import 'package:flutter/material.dart' as _i25;
+import 'package:nerobot/models/task_draft.dart' as _i26;
 import 'package:nerobot/screens/auth/auth_screen.dart' as _i1;
 import 'package:nerobot/screens/auth/confirm_screen.dart' as _i3;
 import 'package:nerobot/screens/profile/all/profile_app_screen.dart' as _i7;
@@ -213,34 +214,96 @@ class ConfirmRouteArgs {
 
 /// generated route for
 /// [_i4.NewConfirmTaskScreen]
-class NewConfirmTaskRoute extends _i24.PageRouteInfo<void> {
-  const NewConfirmTaskRoute({List<_i24.PageRouteInfo>? children})
-    : super(NewConfirmTaskRoute.name, initialChildren: children);
+class NewConfirmTaskRoute extends _i24.PageRouteInfo<NewConfirmTaskRouteArgs> {
+  NewConfirmTaskRoute({
+    _i25.Key? key,
+    required _i26.TaskDraft draft,
+    List<_i24.PageRouteInfo>? children,
+  }) : super(
+         NewConfirmTaskRoute.name,
+         args: NewConfirmTaskRouteArgs(key: key, draft: draft),
+         initialChildren: children,
+       );
 
   static const String name = 'NewConfirmTaskRoute';
 
   static _i24.PageInfo page = _i24.PageInfo(
     name,
     builder: (data) {
-      return const _i4.NewConfirmTaskScreen();
+      final args = data.argsAs<NewConfirmTaskRouteArgs>();
+      return _i4.NewConfirmTaskScreen(key: args.key, draft: args.draft);
     },
   );
 }
 
+class NewConfirmTaskRouteArgs {
+  const NewConfirmTaskRouteArgs({this.key, required this.draft});
+
+  final _i25.Key? key;
+
+  final _i26.TaskDraft draft;
+
+  @override
+  String toString() {
+    return 'NewConfirmTaskRouteArgs{key: $key, draft: $draft}';
+  }
+
+  @override
+  bool operator ==(Object other) {
+    if (identical(this, other)) return true;
+    if (other is! NewConfirmTaskRouteArgs) return false;
+    return key == other.key && draft == other.draft;
+  }
+
+  @override
+  int get hashCode => key.hashCode ^ draft.hashCode;
+}
+
 /// generated route for
 /// [_i5.NewDescScreen]
-class NewDescRoute extends _i24.PageRouteInfo<void> {
-  const NewDescRoute({List<_i24.PageRouteInfo>? children})
-    : super(NewDescRoute.name, initialChildren: children);
+class NewDescRoute extends _i24.PageRouteInfo<NewDescRouteArgs> {
+  NewDescRoute({
+    _i25.Key? key,
+    required _i26.TaskDraft draft,
+    List<_i24.PageRouteInfo>? children,
+  }) : super(
+         NewDescRoute.name,
+         args: NewDescRouteArgs(key: key, draft: draft),
+         initialChildren: children,
+       );
 
   static const String name = 'NewDescRoute';
 
   static _i24.PageInfo page = _i24.PageInfo(
     name,
     builder: (data) {
-      return const _i5.NewDescScreen();
+      final args = data.argsAs<NewDescRouteArgs>();
+      return _i5.NewDescScreen(key: args.key, draft: args.draft);
     },
   );
+}
+
+class NewDescRouteArgs {
+  const NewDescRouteArgs({this.key, required this.draft});
+
+  final _i25.Key? key;
+
+  final _i26.TaskDraft draft;
+
+  @override
+  String toString() {
+    return 'NewDescRouteArgs{key: $key, draft: $draft}';
+  }
+
+  @override
+  bool operator ==(Object other) {
+    if (identical(this, other)) return true;
+    if (other is! NewDescRouteArgs) return false;
+    return key == other.key && draft == other.draft;
+  }
+
+  @override
+  int get hashCode => key.hashCode ^ draft.hashCode;
 }
 
 /// generated route for

@@ -1,3 +1,5 @@
+// new_confirm_task_screen.dart
+
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:auto_route/auto_route.dart';
@@ -7,6 +9,7 @@ import 'package:nerobot/components/ui/Btn.dart';
 import 'package:nerobot/components/ui/Divider.dart';
 import 'package:nerobot/components/ui/location_picker.dart';
 import 'package:nerobot/constants/app_colors.dart';
+import 'package:nerobot/models/task_draft.dart'; // <-- импорт модели TaskDraft
 import 'package:nerobot/router/app_router.gr.dart';
 import 'package:nerobot/utils/date_picker_utils.dart';
 import 'package:nerobot/utils/edit_input_utils.dart';
@@ -15,18 +18,24 @@ import 'package:iconify_flutter/icons/material_symbols.dart';
 
 @RoutePage()
 class NewConfirmTaskScreen extends StatefulWidget {
-  const NewConfirmTaskScreen({super.key});
+  final TaskDraft draft;
+
+  const NewConfirmTaskScreen({Key? key, required this.draft}) : super(key: key);
 
   @override
   State<NewConfirmTaskScreen> createState() => _NewConfirmTaskScreenState();
 }
 
 class _NewConfirmTaskScreenState extends State<NewConfirmTaskScreen> {
-  String taskName = '';
-  String taskDescription = '';
-  int taskPrice = 0;
-  DateTime? taskTerm;
-  String taskCity = '';
+  late String taskName;
+  late String taskDescription;
+  late int taskPrice;
+
+  /// В модели executionTime хранится Duration от момента создания до дедлайна.
+  /// Здесь будем хранить локально абсолютный дедлайн:
+  DateTime? taskDeadline;
+
+  late String taskCity;
   LatLng? taskLocation;
 
   bool isLoading = false;
@@ -34,29 +43,56 @@ class _NewConfirmTaskScreenState extends State<NewConfirmTaskScreen> {
   @override
   void initState() {
     super.initState();
-    // Здесь загрузи последние сохранённые данные из Firestore или передавай через Navigator (если нужно)
-    // Можно также передавать taskId и получать order по нему
+
+    // Из черновика берем:
+    taskName = widget.draft.title;
+    taskDescription = widget.draft.description ?? '';
+    taskPrice = widget.draft.price;
+    taskLocation = widget.draft.location;
+    taskCity = widget.draft.address ?? '';
+
+    // Вычисляем абсолютный дедлайн:
+    // дедлайн = дата создания (draft.date) + duration (draft.executionTime)
+    taskDeadline = widget.draft.date.add(widget.draft.executionTime);
+
+    // Если локация/адрес отсутствуют, подставляем дефолт:
+    if (taskLocation == null) {
+      taskLocation = const LatLng(55.7558, 37.6173); // Москва
+    }
+    if (taskCity.isEmpty) {
+      taskCity = 'Не указано';
+    }
   }
 
   Future<void> _pickDate() async {
-    DateTime? picked = await pickDate(context, initialDate: taskTerm);
+    // При выборе даты/времени мы обновляем taskDeadline,
+    // а затем пересчитываем draft.executionTime = taskDeadline - draft.date
+    DateTime? picked = await pickDate(context, initialDate: taskDeadline);
     if (picked != null) {
-      setState(() => taskTerm = picked);
+      setState(() {
+        taskDeadline = picked;
+        final newDuration = picked.difference(widget.draft.date);
+        // Обязательно не давать отрицательную длительность:
+        widget.draft.executionTime =
+            newDuration.isNegative ? Duration.zero : newDuration;
+      });
     }
   }
 
   Future<void> _pickLocation() async {
-    const LatLng defaultLocation = LatLng(55.7558, 37.6173); // Москва
+    final LatLng defaultLoc = taskLocation ?? const LatLng(55.7558, 37.6173);
     await Navigator.of(context).push(
       MaterialPageRoute(
         builder:
             (_) => LocationPickerMap(
-              initialLocation: taskLocation ?? defaultLocation,
+              initialLocation: defaultLoc,
               onLocationSelected: (location, address) {
                 setState(() {
                   taskLocation = location;
                   taskCity = address;
                 });
+                widget.draft.location = location;
+                widget.draft.address = address;
               },
             ),
       ),
@@ -64,10 +100,11 @@ class _NewConfirmTaskScreenState extends State<NewConfirmTaskScreen> {
   }
 
   Future<void> _submitTask() async {
+    // Проверяем, что все ключевые поля заданы:
     if (taskName.isEmpty ||
         taskPrice <= 0 ||
         taskCity.isEmpty ||
-        taskTerm == null) {
+        taskDeadline == null) {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(content: Text("Пожалуйста, заполните все поля")),
       );
@@ -80,23 +117,23 @@ class _NewConfirmTaskScreenState extends State<NewConfirmTaskScreen> {
       final user = FirebaseAuth.instance.currentUser;
       if (user == null) throw Exception("Не авторизован");
 
-      final timestamp = DateTime.now().millisecondsSinceEpoch;
+      // Подготовим данные для записи:
+      final data = widget.draft.toFirestoreMap();
 
-      await FirebaseFirestore.instance.collection('orders').add({
-        'title': taskName,
-        'description': taskDescription,
-        'price': taskPrice,
-        'payment_for': 'за смену',
-        'lat': taskLocation?.latitude ?? 0,
-        'lng': taskLocation?.longitude ?? 0,
-        'address': taskCity,
-        'begin_at': taskTerm!.millisecondsSinceEpoch,
-        'created_date': timestamp,
-        'creator': user.uid,
-        'active': true,
-      });
+      // Если в модели .toFirestoreMap() используется:
+      //   "begin_at": date.millisecondsSinceEpoch,
+      //   "execution_time": executionTime.inMilliseconds,
+      // то draft.date уже указывает на момент создания,
+      // draft.executionTime — Duration до дедлайна.
+
+      // Если вы хотите в коллекции ‘orders’ хранить еще абсолютный дедлайн,
+      // можно добавить поле "deadline": taskDeadline.millisecondsSinceEpoch.
+      data["deadline"] = taskDeadline!.millisecondsSinceEpoch;
+
+      await FirebaseFirestore.instance.collection('orders').add(data);
 
       if (mounted) {
+        // После успешной записи — уходим к списку задач:
         AutoRouter.of(context).replaceAll([const TaskRoute()]);
       }
     } catch (e) {
@@ -113,7 +150,7 @@ class _NewConfirmTaskScreenState extends State<NewConfirmTaskScreen> {
     return Scaffold(
       appBar: AppBar(
         title: const Text(
-          "Новое задание",
+          "Подтвердите задание",
           style: TextStyle(fontWeight: FontWeight.bold),
         ),
         centerTitle: true,
@@ -124,10 +161,13 @@ class _NewConfirmTaskScreenState extends State<NewConfirmTaskScreen> {
           children: [
             _buildTaskPreviewCard(),
             const Spacer(),
-            Btn(
-              text: isLoading ? 'Размещение...' : 'Разместить задание',
-              onPressed: isLoading ? null : _submitTask,
-              theme: 'violet',
+            Container(
+              width: double.infinity,
+              child: Btn(
+                text: isLoading ? 'Размещение...' : 'Разместить задание',
+                onPressed: isLoading ? null : _submitTask,
+                theme: 'violet',
+              ),
             ),
           ],
         ),
@@ -146,33 +186,48 @@ class _NewConfirmTaskScreenState extends State<NewConfirmTaskScreen> {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
+          // — Название (не редактируется)
           Text(
             taskName,
             style: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
           ),
           const Square(height: 8),
+
+          // — Описание (не редактируется)
           Text(
             taskDescription,
             style: const TextStyle(fontSize: 14, color: AppColors.gray),
           ),
           const Square(),
+
+          // — Редактируемая стоимость
           _buildEditableField("Стоимость", "$taskPrice ₽", () {
             showEditInput(
               context: context,
               initialValue: taskPrice.toString(),
               textColor: Colors.black,
-              onSubmitted:
-                  (val) => setState(() => taskPrice = int.tryParse(val) ?? 0),
-              backgroundColor: Color.fromARGB(0, 42, 42, 153),
+              onSubmitted: (val) {
+                final parsed = int.tryParse(val) ?? 0;
+                setState(() => taskPrice = parsed);
+                widget.draft.price = parsed;
+              },
+              backgroundColor: const Color.fromARGB(0, 42, 42, 153),
             );
           }, borderTop: true),
+
+          // — Редактируемый дедлайн (абсолютный)
           _buildEditableField(
             "Выполнить до",
-            taskTerm != null
-                ? "${taskTerm!.day}.${taskTerm!.month} ${taskTerm!.hour}:${taskTerm!.minute}"
+            taskDeadline != null
+                ? "${taskDeadline!.day.toString().padLeft(2, '0')}."
+                    "${taskDeadline!.month.toString().padLeft(2, '0')} "
+                    "${taskDeadline!.hour.toString().padLeft(2, '0')}:"
+                    "${taskDeadline!.minute.toString().padLeft(2, '0')}"
                 : "Не выбрано",
             _pickDate,
           ),
+
+          // — Редактируемая локация
           _buildEditableField(
             "Локация",
             taskCity.isNotEmpty ? taskCity : "Укажите",

@@ -1,6 +1,8 @@
-import 'package:cloud_firestore/cloud_firestore.dart';
-import 'package:firebase_auth/firebase_auth.dart';
+// new_task_create_screen.dart
+
 import 'package:auto_route/auto_route.dart';
+import 'package:cloud_firestore/cloud_firestore.dart'; // (если сохраним сразу в Firestore)
+import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
 import 'package:geocoding/geocoding.dart';
 import 'package:geolocator/geolocator.dart';
@@ -11,12 +13,13 @@ import 'package:nerobot/components/ui/Inputs.dart';
 import 'package:nerobot/components/ui/location_picker.dart';
 import 'package:nerobot/components/ui/pick_date.dart';
 import 'package:nerobot/constants/app_colors.dart';
+import 'package:nerobot/models/task_draft.dart'; // <-- импорт вашей модели
 import 'package:nerobot/router/app_router.gr.dart';
 import 'package:nerobot/utils/task_confirmation.dart';
 
 @RoutePage()
 class NewTaskCreateScreen extends StatefulWidget {
-  const NewTaskCreateScreen({super.key});
+  const NewTaskCreateScreen({Key? key}) : super(key: key);
 
   @override
   State<NewTaskCreateScreen> createState() => _NewTaskCreateScreenState();
@@ -27,16 +30,24 @@ class _NewTaskCreateScreenState extends State<NewTaskCreateScreen> {
   final _priceController = TextEditingController();
   LatLng? _selectedLocation;
   String? _selectedAddress;
-  DateTime? _selectedDate;
+
+  // Срок выполнения (абсолютная дата и время)
+  DateTime? _deadline;
+
+  // Срочность
+  String? _selectedUrgency;
+
   bool _isLoading = false;
 
-  // 🔹 Локальный стейт задачи
-  Map<String, dynamic> _localTaskData = {};
+  // Варианты срочности
+  final List<String> _urgencyOptions = ['низкая', 'средняя', 'высокая'];
 
   @override
   void initState() {
     super.initState();
-    _selectedDate = DateTime.now();
+    // По умолчанию ставим дедлайн через час от момента открытия экрана
+    _deadline = DateTime.now().add(const Duration(hours: 1));
+    _selectedUrgency = _urgencyOptions[1]; // «средняя» по умолчанию
     _getCurrentLocation();
   }
 
@@ -47,7 +58,6 @@ class _NewTaskCreateScreenState extends State<NewTaskCreateScreen> {
     if (permission == LocationPermission.denied) {
       permission = await Geolocator.requestPermission();
     }
-
     if (permission == LocationPermission.deniedForever) return;
 
     final position = await Geolocator.getCurrentPosition();
@@ -63,7 +73,6 @@ class _NewTaskCreateScreenState extends State<NewTaskCreateScreen> {
         location.latitude,
         location.longitude,
       );
-
       if (placemarks.isNotEmpty) {
         final place = placemarks.first;
         final address = "${place.street}, ${place.locality}";
@@ -93,54 +102,89 @@ class _NewTaskCreateScreenState extends State<NewTaskCreateScreen> {
     );
   }
 
-  Future<void> _createTask() async {
+  Future<void> _pickDeadline() async {
+    // Сначала выбираем дату, потом время
+    final DateTime now = DateTime.now();
+    final DateTime initial = _deadline ?? now.add(const Duration(hours: 1));
+
+    final DateTime? pickedDate = await showDatePicker(
+      context: context,
+      initialDate: initial,
+      firstDate: now,
+      lastDate: now.add(const Duration(days: 365)),
+    );
+    if (pickedDate == null) return;
+
+    final TimeOfDay initialTime = TimeOfDay.fromDateTime(initial);
+    final TimeOfDay? pickedTime = await showTimePicker(
+      context: context,
+      initialTime: initialTime,
+    );
+    if (pickedTime == null) return;
+
+    final combined = DateTime(
+      pickedDate.year,
+      pickedDate.month,
+      pickedDate.day,
+      pickedTime.hour,
+      pickedTime.minute,
+    );
+
+    setState(() {
+      _deadline = combined;
+    });
+  }
+
+  void _onNextPressed() {
     final name = _nameController.text.trim();
     final price = int.tryParse(_priceController.text.trim()) ?? 0;
+    final deadline = _deadline;
     final location = _selectedLocation;
-    final address = _selectedAddress ?? '';
-    final createdAt = DateTime.now().millisecondsSinceEpoch;
+    final address = _selectedAddress;
+    final urgency = _selectedUrgency;
     final user = FirebaseAuth.instance.currentUser;
 
-    if (name.isEmpty || price <= 0 || location == null || user == null) {
+    // Проверка: все поля должны быть заполнены
+    if (name.isEmpty ||
+        price <= 0 ||
+        deadline == null ||
+        location == null ||
+        address == null ||
+        urgency == null ||
+        user == null) {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(content: Text("Пожалуйста, заполните все поля")),
       );
       return;
     }
 
-    final taskData = {
-      "title": name,
-      "description": name,
-      "price": price,
-      "payment_for": "за смену",
-      "lat": location.latitude,
-      "lng": location.longitude,
-      "address": address,
-      "begin_at": createdAt,
-      "created_date": createdAt,
-      "creator": user.uid,
-      "active": true,
-    };
+    setState(() => _isLoading = true);
 
-    // 🔹 Сохраняем в локальный стейт
-    setState(() {
-      _isLoading = true;
-      _localTaskData = taskData;
-    });
+    // Дата создания — сейчас:
+    final creationDate = DateTime.now();
 
-    try {
-      await FirebaseFirestore.instance.collection('orders').add(taskData);
+    // Вычисляем разницу (Duration) между дедлайном и датой создания
+    final duration = deadline.difference(creationDate);
 
-      if (mounted) {
-        AutoRouter.of(context).replace(NewDescRoute());
-      }
-    } catch (e) {
-      ScaffoldMessenger.of(
-        context,
-      ).showSnackBar(SnackBar(content: Text('Ошибка: $e')));
-    } finally {
+    // Формируем TaskDraft:
+    final draft = TaskDraft(
+      title: name,
+      price: price,
+      date: creationDate, // сохраняем дату создания
+      location: location,
+      address: address,
+      creatorUid: user.uid,
+      executionTime: duration, // запись Duration вместо абсолютного времени
+      urgency: urgency,
+      deleted: false,
+      // description пока не передаём — заполним на следующем экране
+    );
+
+    // Переходим на экран ввода описания, передавая draft
+    context.router.push(NewDescRoute(draft: draft)).then((_) {
+      // Если вернулись назад, отключаем индикатор загрузки
       if (mounted) setState(() => _isLoading = false);
-    }
+    });
   }
 
   @override
@@ -158,7 +202,7 @@ class _NewTaskCreateScreenState extends State<NewTaskCreateScreen> {
         appBar: AppBar(
           backgroundColor: AppColors.bg,
           title: const Text(
-            "Новое задание",
+            "Новое задание (Шаг 1/3)",
             style: TextStyle(fontWeight: FontWeight.bold),
           ),
           centerTitle: true,
@@ -167,6 +211,7 @@ class _NewTaskCreateScreenState extends State<NewTaskCreateScreen> {
           padding: const EdgeInsets.all(16.0),
           child: ListView(
             children: [
+              // Название
               Inputs(
                 controller: _nameController,
                 backgroundColor: AppColors.ulight,
@@ -174,8 +219,9 @@ class _NewTaskCreateScreenState extends State<NewTaskCreateScreen> {
                 label: 'Название',
                 required: true,
               ),
-              const Square(),
+              const SizedBox(height: 16),
 
+              // Стоимость
               Inputs(
                 controller: _priceController,
                 backgroundColor: AppColors.ulight,
@@ -185,16 +231,85 @@ class _NewTaskCreateScreenState extends State<NewTaskCreateScreen> {
                 maxLength: 9,
                 required: true,
               ),
-              const Square(),
+              const SizedBox(height: 16),
 
-              PickDate(
-                initialDate: _selectedDate!,
-                onDatePicked: (date) => setState(() => _selectedDate = date),
+              // Срок выполнения (дата + время)
+              const Text("Срок выполнения", style: TextStyle(fontSize: 16)),
+              const SizedBox(height: 8),
+              GestureDetector(
+                onTap: _pickDeadline,
+                child: Container(
+                  padding: const EdgeInsets.all(16),
+                  decoration: BoxDecoration(
+                    color: AppColors.ulight,
+                    borderRadius: BorderRadius.circular(8),
+                  ),
+                  child: Row(
+                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                    children: [
+                      Text(
+                        _deadline == null
+                            ? "Выбрать дату и время"
+                            : "${_deadline!.day.toString().padLeft(2, '0')}"
+                                ".${_deadline!.month.toString().padLeft(2, '0')}"
+                                ".${_deadline!.year} "
+                                "${_deadline!.hour.toString().padLeft(2, '0')}"
+                                ":${_deadline!.minute.toString().padLeft(2, '0')}",
+                        style: const TextStyle(
+                          color: AppColors.gray,
+                          fontSize: 16,
+                        ),
+                      ),
+                      const Icon(Icons.schedule, color: AppColors.gray),
+                    ],
+                  ),
+                ),
               ),
-              const Square(),
+              const SizedBox(height: 16),
 
+              // Срочность (Dropdown)
+              const Text("Срочность", style: TextStyle(fontSize: 16)),
+              const SizedBox(height: 8),
+              Container(
+                padding: const EdgeInsets.symmetric(horizontal: 12),
+                decoration: BoxDecoration(
+                  color: AppColors.ulight,
+                  borderRadius: BorderRadius.circular(8),
+                ),
+                child: DropdownButton<String>(
+                  underline: const SizedBox(),
+                  value: _selectedUrgency,
+                  isExpanded: true,
+                  icon: const Icon(
+                    Icons.arrow_drop_down,
+                    color: AppColors.gray,
+                  ),
+                  items:
+                      _urgencyOptions
+                          .map(
+                            (urg) => DropdownMenuItem(
+                              value: urg,
+                              child: Text(
+                                urg[0].toUpperCase() + urg.substring(1),
+                                style: const TextStyle(color: AppColors.black),
+                              ),
+                            ),
+                          )
+                          .toList(),
+                  onChanged: (value) {
+                    if (value != null) {
+                      setState(() {
+                        _selectedUrgency = value;
+                      });
+                    }
+                  },
+                ),
+              ),
+              const SizedBox(height: 16),
+
+              // Локация
               const Text("Локация", style: TextStyle(fontSize: 16)),
-              const Square(height: 8),
+              const SizedBox(height: 8),
               GestureDetector(
                 onTap: _openLocationPicker,
                 child: Container(
@@ -206,11 +321,13 @@ class _NewTaskCreateScreenState extends State<NewTaskCreateScreen> {
                   child: Row(
                     mainAxisAlignment: MainAxisAlignment.spaceBetween,
                     children: [
-                      Text(
-                        _selectedAddress ?? "Определение адреса...",
-                        style: const TextStyle(
-                          color: AppColors.gray,
-                          fontSize: 16,
+                      Expanded(
+                        child: Text(
+                          _selectedAddress ?? "Определение адреса...",
+                          style: const TextStyle(
+                            color: AppColors.gray,
+                            fontSize: 16,
+                          ),
                         ),
                       ),
                       const Icon(Icons.map_outlined, color: AppColors.gray),
@@ -218,11 +335,12 @@ class _NewTaskCreateScreenState extends State<NewTaskCreateScreen> {
                   ),
                 ),
               ),
-              const Square(),
+              const SizedBox(height: 32),
 
+              // Кнопка “Далее”
               Btn(
-                text: _isLoading ? "Создание..." : "Продолжить",
-                onPressed: _isLoading ? null : _createTask,
+                text: _isLoading ? "Загрузка..." : "Далее: Описание",
+                onPressed: _isLoading ? null : _onNextPressed,
                 theme: 'violet',
               ),
             ],

@@ -41,8 +41,6 @@ class _TaskDetailExecutorScreenState extends State<TaskDetailExecutorScreen> {
   /// Флаг: уже ли текущий пользователь оставлял отклик (есть ли он в массиве 'responses')
   bool get _hasResponded {
     final List responses = task?['responses'] ?? [];
-    // Предположим, что в поле 'responses' лежит список UID пользователей,
-    // уже отправлявших отклик. Если структура другая, измените условие проверки.
     return responses.contains(_uid);
   }
 
@@ -80,6 +78,25 @@ class _TaskDetailExecutorScreenState extends State<TaskDetailExecutorScreen> {
     } else {
       statusReadable = 'Поиск исполнителя';
       isSearching = true;
+    }
+  }
+
+  /// Новый метод: обновляет статус документа заказа на "preview"
+  Future<void> _confirmExecution() async {
+    try {
+      await FirebaseFirestore.instance
+          .collection('orders')
+          .doc(widget.taskId)
+          .update({'status': 'preview'});
+      // После успешного обновления можно вернуться назад
+      if (mounted) {
+        Navigator.of(context).pop(); // или любой другой навигационный шаг
+      }
+    } catch (e) {
+      // Обработайте ошибку по необходимости
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Не удалось подтвердить выполнение: $e')),
+      );
     }
   }
 
@@ -186,7 +203,6 @@ class _TaskDetailExecutorScreenState extends State<TaskDetailExecutorScreen> {
                       text: 'Отказаться',
                       theme: 'white',
                       onPressed: () {
-                        // Здесь можно просто ничего не делать или закрыть экран.
                         Navigator.of(context).pop();
                       },
                     ),
@@ -203,18 +219,21 @@ class _TaskDetailExecutorScreenState extends State<TaskDetailExecutorScreen> {
                 ],
               ),
             ]
-            // 2) Если статус «В работе» и текущий пользователь — назначенный исполнитель, показываем кнопку «Подтвердить выполнение»
+            // 2) Если статус «В работе» и текущий пользователь — назначенный исполнитель,
+            //    показываем кнопку «Подтвердить выполнение»
             else if (isInWork && _iAmWorker) ...[
               SizedBox(
                 width: double.infinity,
                 child: Btn(
-                  text: 'Подтвердить выполнение',
+                  text: 'Подтвердить выполнениеss',
                   theme: 'violet',
-                  onPressed: () => openResponseModal(context, widget.taskId),
+                  // вместо openResponseModal вызываем обновление статуса
+                  onPressed: _confirmExecution,
                 ),
               ),
             ]
-            // 3) Во всех остальных случаях (либо «Завершено», либо уже откликнулись) — можно показать поясняющий текст
+            // 3) Во всех остальных случаях (либо «Завершено», либо уже откликнулись) —
+            //    показываем поясняющий текст
             else if (isSearching && _hasResponded) ...[
               Center(
                 child: Text(

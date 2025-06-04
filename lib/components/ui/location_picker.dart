@@ -19,15 +19,16 @@ class LocationPickerMap extends StatefulWidget {
 }
 
 class _LocationPickerMapState extends State<LocationPickerMap> {
-  LatLng? _selectedLocation;
+  late LatLng _selectedLocation;
   String? _selectedAddress;
   bool _isLoading = false;
 
   @override
   void initState() {
     super.initState();
+    // Сразу выставляем переданное initialLocation
     _selectedLocation = widget.initialLocation;
-    _getAddressFromLatLng(_selectedLocation!);
+    _getAddressFromLatLng(_selectedLocation);
   }
 
   Future<void> _getAddressFromLatLng(LatLng location) async {
@@ -41,7 +42,7 @@ class _LocationPickerMapState extends State<LocationPickerMap> {
         location.longitude,
       );
       if (placemarks.isNotEmpty) {
-        Placemark place = placemarks.first;
+        final place = placemarks.first;
         setState(() {
           _selectedAddress = "${place.street}, ${place.locality}";
         });
@@ -62,11 +63,7 @@ class _LocationPickerMapState extends State<LocationPickerMap> {
   }
 
   Future<void> _getCurrentLocation() async {
-    bool serviceEnabled;
-    LocationPermission permission;
-
-    // Проверяем доступность службы геолокации
-    serviceEnabled = await Geolocator.isLocationServiceEnabled();
+    bool serviceEnabled = await Geolocator.isLocationServiceEnabled();
     if (!serviceEnabled) {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(content: Text("Служба геолокации отключена")),
@@ -74,8 +71,7 @@ class _LocationPickerMapState extends State<LocationPickerMap> {
       return;
     }
 
-    // Проверяем разрешения
-    permission = await Geolocator.checkPermission();
+    LocationPermission permission = await Geolocator.checkPermission();
     if (permission == LocationPermission.denied) {
       permission = await Geolocator.requestPermission();
       if (permission == LocationPermission.denied) {
@@ -93,17 +89,14 @@ class _LocationPickerMapState extends State<LocationPickerMap> {
       return;
     }
 
-    // Получаем текущую позицию
     Position position = await Geolocator.getCurrentPosition(
       desiredAccuracy: LocationAccuracy.high,
     );
-
     LatLng currentLocation = LatLng(position.latitude, position.longitude);
+
     setState(() {
       _selectedLocation = currentLocation;
     });
-
-    // Обновляем адрес
     _getAddressFromLatLng(currentLocation);
   }
 
@@ -125,7 +118,8 @@ class _LocationPickerMapState extends State<LocationPickerMap> {
           Expanded(
             child: FlutterMap(
               options: MapOptions(
-                initialCenter: LatLng(51.509364, -0.128928),
+                // Используем выбранную локацию из initState
+                initialCenter: _selectedLocation,
                 initialZoom: 13.0,
                 onTap: (tapPosition, point) {
                   setState(() {
@@ -136,29 +130,33 @@ class _LocationPickerMapState extends State<LocationPickerMap> {
               ),
               children: [
                 TileLayer(
-                  urlTemplate:
-                      "https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png",
-                  subdomains: const ['a', 'b', 'c'],
+                  // Без subdomains, один URL для OSM
+                  urlTemplate: "https://tile.openstreetmap.org/{z}/{x}/{y}.png",
                 ),
-                if (_selectedLocation != null)
-                  MarkerLayer(
-                    markers: [
-                      Marker(
-                        point: _selectedLocation!,
-                        width: 40, // Ширина маркера
-                        height: 40, // Высота маркера
-                        child: Icon(Icons.import_contacts),
+                MarkerLayer(
+                  markers: [
+                    Marker(
+                      point: _selectedLocation,
+                      width: 40,
+                      height: 40,
+                      child: const Icon(
+                        Icons.location_on,
+                        color: Colors.red,
+                        size: 40,
                       ),
-                    ],
-                  ),
+                    ),
+                  ],
+                ),
               ],
             ),
           ),
+
           if (_isLoading)
             const Padding(
               padding: EdgeInsets.all(8.0),
               child: CircularProgressIndicator(),
             ),
+
           if (_selectedAddress != null)
             Padding(
               padding: const EdgeInsets.all(8.0),
@@ -168,13 +166,14 @@ class _LocationPickerMapState extends State<LocationPickerMap> {
                 style: const TextStyle(fontSize: 16),
               ),
             ),
+
           Padding(
             padding: const EdgeInsets.all(16.0),
             child: ElevatedButton(
               onPressed: () {
                 if (_selectedLocation != null && _selectedAddress != null) {
                   widget.onLocationSelected(
-                    _selectedLocation!,
+                    _selectedLocation,
                     _selectedAddress!,
                   );
                   Navigator.of(context).pop();
