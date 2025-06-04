@@ -2,25 +2,108 @@ import 'package:auto_route/auto_route.dart';
 import 'package:flutter/material.dart';
 import 'package:nerobot/components/ui/Icons.dart';
 import 'package:nerobot/constants/app_colors.dart';
+import 'package:package_info_plus/package_info_plus.dart';
+import 'package:shared_preferences/shared_preferences.dart';
+import 'package:firebase_auth/firebase_auth.dart';
+import 'package:cloud_firestore/cloud_firestore.dart';
 
 @RoutePage()
-class ProfileAppScreen extends StatelessWidget {
+class ProfileAppScreen extends StatefulWidget {
   const ProfileAppScreen({super.key});
+
+  @override
+  State<ProfileAppScreen> createState() => _ProfileAppScreenState();
+}
+
+class _ProfileAppScreenState extends State<ProfileAppScreen> {
+  String _appVersion = 'Загрузка...';
+
+  @override
+  void initState() {
+    super.initState();
+    _loadAppVersion();
+  }
+
+  Future<void> _loadAppVersion() async {
+    final info = await PackageInfo.fromPlatform();
+    setState(() {
+      _appVersion = 'Версия: ${info.version}';
+    });
+  }
+
+  Future<void> _clearCache() async {
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.clear();
+    if (!mounted) return;
+    ScaffoldMessenger.of(
+      context,
+    ).showSnackBar(const SnackBar(content: Text('Кэш успешно очищен')));
+  }
+
+  Future<void> _deleteAccount() async {
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder:
+          (ctx) => AlertDialog(
+            title: const Text('Удалить аккаунт?'),
+            content: const Text(
+              'Вы уверены, что хотите безвозвратно удалить свой аккаунт?',
+            ),
+            actions: [
+              TextButton(
+                onPressed: () => Navigator.pop(ctx, false),
+                child: const Text('Отмена'),
+              ),
+              TextButton(
+                onPressed: () => Navigator.pop(ctx, true),
+                child: const Text('Удалить'),
+              ),
+            ],
+          ),
+    );
+
+    if (confirmed != true) return;
+
+    try {
+      final user = FirebaseAuth.instance.currentUser;
+      if (user != null) {
+        // Удалим документ из Firestore
+        await FirebaseFirestore.instance
+            .collection('users')
+            .doc(user.uid)
+            .delete();
+        // Удалим аккаунт из Firebase Auth
+        await user.delete();
+
+        if (!mounted) return;
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(const SnackBar(content: Text('Аккаунт удалён')));
+        // Здесь можно добавить логику, например, редирект на экран логина
+      }
+    } catch (e) {
+      debugPrint('Ошибка при удалении аккаунта: $e');
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Не удалось удалить аккаунт')),
+      );
+    }
+  }
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(title: const Text('О приложении')),
       body: Padding(
-        padding: const EdgeInsets.all(16.0),
+        padding: const EdgeInsets.symmetric(vertical: 16),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            const Center(
+            Center(
               child: Column(
                 children: [
-                  Text('Версия: 0.00.0', style: TextStyle(color: Colors.grey)),
-                  SizedBox(height: 16),
+                  Text(_appVersion, style: const TextStyle(color: Colors.grey)),
+                  const SizedBox(height: 16),
                 ],
               ),
             ),
@@ -35,7 +118,7 @@ class ProfileAppScreen extends StatelessWidget {
                       color: AppColors.gray,
                     ),
                     onTap: () {
-                      // Логика для "Напишите нам"
+                      // TODO: Логика для "Напишите нам"
                     },
                   ),
                   CustomListTile(
@@ -46,19 +129,17 @@ class ProfileAppScreen extends StatelessWidget {
                       color: AppColors.gray,
                     ),
                     onTap: () {
-                      // Логика для "Напишите нам"
+                      // TODO: Логика для "Рейтинг"
                     },
                   ),
                   CustomListTile(
-                    title: 'Очистить кэш ',
+                    title: 'Очистить кэш',
                     icon: const IconWidget(
                       iconName: 'right',
                       size: 10,
                       color: AppColors.gray,
                     ),
-                    onTap: () {
-                      // Логика для "Напишите нам"
-                    },
+                    onTap: _clearCache,
                   ),
                   CustomListTile(
                     title: 'Правила сервиса',
@@ -68,7 +149,7 @@ class ProfileAppScreen extends StatelessWidget {
                       color: AppColors.gray,
                     ),
                     onTap: () {
-                      // Логика для "Напишите нам"
+                      // TODO: Логика для "Правила сервиса"
                     },
                   ),
                   CustomListTile(
@@ -79,7 +160,7 @@ class ProfileAppScreen extends StatelessWidget {
                       color: AppColors.gray,
                     ),
                     onTap: () {
-                      // Логика для "Напишите нам"
+                      // TODO: Логика для "Политика конфиденциальности"
                     },
                   ),
                   CustomListTile(
@@ -90,9 +171,7 @@ class ProfileAppScreen extends StatelessWidget {
                       size: 10,
                       color: AppColors.red,
                     ),
-                    onTap: () {
-                      // Логика для "Напишите нам"
-                    },
+                    onTap: _deleteAccount,
                   ),
                 ],
               ),
@@ -103,28 +182,26 @@ class ProfileAppScreen extends StatelessWidget {
                 children: [
                   CustomListTile(
                     title: 'ВКонтакте',
-                    leadingAsset:
-                        'assets/images/vk.png', // Укажите путь к изображению
+                    leadingAsset: 'assets/images/vk.png',
                     icon: const IconWidget(
                       iconName: 'right',
                       size: 10,
                       color: AppColors.gray,
                     ),
                     onTap: () {
-                      // Логика для второго пункта
+                      // TODO: Логика для "ВКонтакте"
                     },
                   ),
                   CustomListTile(
                     title: 'Telegram',
-                    leadingAsset:
-                        'assets/images/tg.png', // Укажите путь к изображению
+                    leadingAsset: 'assets/images/tg.png',
                     icon: const IconWidget(
                       iconName: 'right',
                       size: 10,
                       color: AppColors.gray,
                     ),
                     onTap: () {
-                      // Логика для второго пункта
+                      // TODO: Логика для "Telegram"
                     },
                   ),
                 ],

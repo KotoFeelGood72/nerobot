@@ -40,15 +40,6 @@
             android:name="com.google.firebase.messaging.default_notification_channel_id"
             android:value="high_importance_channel"/>
 
-        <!-- Сервис для обработки входящих FCM-сообщений -->
-        <service
-            android:name="com.google.firebase.messaging.FirebaseMessagingService"
-            android:exported="true">
-            <intent-filter>
-                <action android:name="com.google.firebase.MESSAGING_EVENT"/>
-            </intent-filter>
-        </service>
-
         <!-- Не удаляйте этот мета-дата — нужен для регистрации Flutter-плагинов -->
         <meta-data
             android:name="flutterEmbedding"

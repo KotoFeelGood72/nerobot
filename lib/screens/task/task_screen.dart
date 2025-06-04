@@ -31,6 +31,9 @@ class _TaskScreenState extends State<TaskScreen> {
   String searchQuery = '';
   final TextEditingController _searchController = TextEditingController();
 
+  // Новый флаг: показывать ли поле поиска в AppBar
+  bool _isSearching = false;
+
   // ---------- utils ----------
   List<String> get _filters =>
       role == 'worker' ? ['tasks', 'open', 'history'] : ['tasks', 'history'];
@@ -54,6 +57,7 @@ class _TaskScreenState extends State<TaskScreen> {
     super.initState();
     _listenRole(); // ← сразу ставим слушателя
     // слушаем изменение текста поиска, чтобы обновлять отображение в реальном времени
+    // слушаем изменение текста поиска, чтобы фильтрация работала в реальном времени
     _searchController.addListener(() {
       setState(() {
         searchQuery = _searchController.text.trim();
@@ -217,23 +221,81 @@ class _TaskScreenState extends State<TaskScreen> {
         automaticallyImplyLeading: false,
         elevation: 0,
         backgroundColor: Colors.white,
-        title: Text(
-          'Задания $role',
-          style: const TextStyle(fontWeight: FontWeight.bold),
-        ),
+        // Если в режиме поиска, показываем TextField вместо заголовка
+        title:
+            _isSearching
+                ? SizedBox(
+                  height: 40,
+                  child: TextField(
+                    controller: _searchController,
+                    autofocus: true,
+                    decoration: InputDecoration(
+                      hintText: 'Поиск...',
+                      filled: true,
+                      fillColor: AppColors.ulight,
+                      contentPadding: const EdgeInsets.symmetric(
+                        vertical: 0,
+                        horizontal: 16,
+                      ),
+                      border: OutlineInputBorder(
+                        borderRadius: BorderRadius.circular(30),
+                        borderSide: BorderSide.none,
+                      ),
+                    ),
+                    onChanged: (val) {
+                      setState(() {
+                        searchQuery = val.trim();
+                      });
+                    },
+                  ),
+                )
+                : Text(
+                  'Задания $role',
+                  style: const TextStyle(fontWeight: FontWeight.bold),
+                ),
         centerTitle: true,
         actions: [
-          if (role != 'worker')
+          // Если не в режиме поиска, показываем иконку поиска
+          if (!_isSearching)
+            IconButton(
+              icon: const Icon(Icons.search, color: Colors.black),
+              onPressed: () {
+                setState(() {
+                  _isSearching = true;
+                  // Очистим предыдущий ввод
+                  searchQuery = '';
+                  _searchController.clear();
+                });
+              },
+            ),
+          // Если в режиме поиска, показываем иконку закрытия
+          if (_isSearching)
+            IconButton(
+              icon: const Icon(Icons.close, color: Colors.black),
+              onPressed: () {
+                setState(() {
+                  _isSearching = false;
+                  searchQuery = '';
+                  _searchController.clear();
+                });
+              },
+            ),
+          // Существующая кнопка "добавить" для customer
+          if (!_isSearching && role != 'worker')
             IconButton(
               icon: const Icon(Icons.add, color: Colors.black),
               onPressed:
                   () => AutoRouter.of(context).push(NewTaskCreateRoute()),
             ),
         ],
-        bottom: PreferredSize(
-          preferredSize: const Size.fromHeight(50),
-          child: _buildTabs(titles),
-        ),
+        // Если не в режиме поиска, отображаем табы; иначе прячем таббар
+        bottom:
+            !_isSearching
+                ? PreferredSize(
+                  preferredSize: const Size.fromHeight(50),
+                  child: _buildTabs(titles),
+                )
+                : null,
       ),
 
       body: RefreshIndicator(
@@ -242,26 +304,6 @@ class _TaskScreenState extends State<TaskScreen> {
           padding: const EdgeInsets.all(16),
           child: Column(
             children: [
-              // ---------- Поисковая строка ----------
-              TextField(
-                controller: _searchController,
-                decoration: InputDecoration(
-                  hintText: 'Поиск по названию или описанию',
-                  prefixIcon: const Icon(Icons.search),
-                  filled: true,
-                  fillColor: AppColors.ulight,
-                  border: OutlineInputBorder(
-                    borderRadius: BorderRadius.circular(30),
-                    borderSide: BorderSide.none,
-                  ),
-                  contentPadding: const EdgeInsets.symmetric(
-                    vertical: 0,
-                    horizontal: 20,
-                  ),
-                ),
-              ),
-              const SizedBox(height: 16),
-
               // ---------- Список задач (с учётом поиска) ----------
               Expanded(
                 child: TaskList(

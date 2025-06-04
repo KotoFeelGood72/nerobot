@@ -64,7 +64,8 @@ class _AuthScreenState extends State<AuthScreen> {
           'device_tokens': [fcmToken],
           'type': widget.role,
           'created_date': DateTime.now().millisecondsSinceEpoch,
-          // например, сразу можно сохранить номер:
+          'subscription_status': false,
+          'subscription_days': 10,
           'phone': FirebaseAuth.instance.currentUser?.phoneNumber,
         }, SetOptions(merge: true));
       }

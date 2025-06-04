@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
+import 'package:nerobot/constants/app_colors.dart';
 
 class MessageBubble extends StatelessWidget {
   /// данные одного сообщения из Firestore
@@ -29,7 +30,7 @@ class MessageBubble extends StatelessWidget {
         margin: const EdgeInsets.all(8),
         padding: const EdgeInsets.symmetric(vertical: 8, horizontal: 12),
         decoration: BoxDecoration(
-          color: isMine ? Colors.blue : Colors.grey[300],
+          color: isMine ? AppColors.violet : AppColors.border,
           borderRadius: BorderRadius.circular(16),
         ),
         child: Column(

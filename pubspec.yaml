@@ -55,6 +55,7 @@ dependencies:
   flutter_otp_text_field: ^1.5.1+1
   firebase_storage: ^12.4.6
   shared_preferences: ^2.5.3
+  package_info_plus: ^8.3.0
 
 dev_dependencies:
   flutter_test:
