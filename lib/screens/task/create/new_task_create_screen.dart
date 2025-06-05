@@ -1,12 +1,13 @@
 // new_task_create_screen.dart
 
 import 'package:auto_route/auto_route.dart';
-import 'package:cloud_firestore/cloud_firestore.dart'; // (если сохраним сразу в Firestore)
+import 'package:cloud_firestore/cloud_firestore.dart'; // если сохраняем сразу в Firestore
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
 import 'package:geocoding/geocoding.dart';
 import 'package:geolocator/geolocator.dart';
 import 'package:latlong2/latlong.dart';
+
 import 'package:nerobot/components/ui/Btn.dart';
 import 'package:nerobot/components/ui/Divider.dart';
 import 'package:nerobot/components/ui/Inputs.dart';
@@ -51,7 +52,9 @@ class _NewTaskCreateScreenState extends State<NewTaskCreateScreen> {
     _getCurrentLocation();
   }
 
+  /// Получаем текущие координаты и затем обратный геокодинг
   Future<void> _getCurrentLocation() async {
+    // Проверяем, включён ли сервис локации
     if (!await Geolocator.isLocationServiceEnabled()) return;
 
     var permission = await Geolocator.checkPermission();
@@ -60,11 +63,20 @@ class _NewTaskCreateScreenState extends State<NewTaskCreateScreen> {
     }
     if (permission == LocationPermission.deniedForever) return;
 
-    final position = await Geolocator.getCurrentPosition();
-    final location = LatLng(position.latitude, position.longitude);
+    try {
+      final position = await Geolocator.getCurrentPosition();
+      final location = LatLng(position.latitude, position.longitude);
 
-    setState(() => _selectedLocation = location);
-    _getAddressFromLatLng(location);
+      // Проверяем, что экран ещё «монтирован», прежде чем вызывать setState
+      if (!mounted) return;
+      setState(() => _selectedLocation = location);
+
+      // После обновления _selectedLocation запускаем получение адреса
+      _getAddressFromLatLng(location);
+    } catch (e) {
+      // В случае ошибки просто не обновляем локацию
+      debugPrint("Ошибка при получении геопозиции: $e");
+    }
   }
 
   Future<void> _getAddressFromLatLng(LatLng location) async {
@@ -76,15 +88,22 @@ class _NewTaskCreateScreenState extends State<NewTaskCreateScreen> {
       if (placemarks.isNotEmpty) {
         final place = placemarks.first;
         final address = "${place.street}, ${place.locality}";
+
+        if (!mounted) return;
         setState(() => _selectedAddress = address);
+        return;
       }
-    } catch (_) {
-      setState(() => _selectedAddress = "Ошибка определения адреса");
+    } catch (e) {
+      debugPrint("Ошибка при обратном геокодинге: $e");
     }
+
+    if (!mounted) return;
+    setState(() => _selectedAddress = "Ошибка определения адреса");
   }
 
   void _openLocationPicker() async {
     final initial = _selectedLocation ?? const LatLng(55.7558, 37.6173);
+    // Здесь можно дождаться результата и обновить локацию/адрес
     await Navigator.push(
       context,
       MaterialPageRoute(
@@ -92,6 +111,8 @@ class _NewTaskCreateScreenState extends State<NewTaskCreateScreen> {
             (_) => LocationPickerMap(
               initialLocation: initial,
               onLocationSelected: (location, address) {
+                // Проверяем mounted в колбэке тоже:
+                if (!mounted) return;
                 setState(() {
                   _selectedLocation = location;
                   _selectedAddress = address;
@@ -103,7 +124,6 @@ class _NewTaskCreateScreenState extends State<NewTaskCreateScreen> {
   }
 
   Future<void> _pickDeadline() async {
-    // Сначала выбираем дату, потом время
     final DateTime now = DateTime.now();
     final DateTime initial = _deadline ?? now.add(const Duration(hours: 1));
 
@@ -130,6 +150,7 @@ class _NewTaskCreateScreenState extends State<NewTaskCreateScreen> {
       pickedTime.minute,
     );
 
+    if (!mounted) return;
     setState(() {
       _deadline = combined;
     });
@@ -158,6 +179,8 @@ class _NewTaskCreateScreenState extends State<NewTaskCreateScreen> {
       return;
     }
 
+    // Переключаем индикатор загрузки
+    if (!mounted) return;
     setState(() => _isLoading = true);
 
     // Дата создания — сейчас:
@@ -181,10 +204,20 @@ class _NewTaskCreateScreenState extends State<NewTaskCreateScreen> {
     );
 
     // Переходим на экран ввода описания, передавая draft
-    context.router.push(NewDescRoute(draft: draft)).then((_) {
-      // Если вернулись назад, отключаем индикатор загрузки
-      if (mounted) setState(() => _isLoading = false);
-    });
+    context.router
+        .push(NewDescRoute(draft: draft))
+        .then((_) {
+          // Этот callback срабатывает, когда вернулись обратно с экрана описания.
+          // Проверяем, что экран всё ещё «монтирован», прежде чем вызывать setState
+          if (!mounted) return;
+          setState(() => _isLoading = false);
+        })
+        .catchError((e) {
+          // Если push завершился с ошибкой, тоже отключаем индикатор
+          if (!mounted) return;
+          setState(() => _isLoading = false);
+          debugPrint("Ошибка при навигации: $e");
+        });
   }
 
   @override
@@ -250,11 +283,11 @@ class _NewTaskCreateScreenState extends State<NewTaskCreateScreen> {
                       Text(
                         _deadline == null
                             ? "Выбрать дату и время"
-                            : "${_deadline!.day.toString().padLeft(2, '0')}"
-                                ".${_deadline!.month.toString().padLeft(2, '0')}"
-                                ".${_deadline!.year} "
-                                "${_deadline!.hour.toString().padLeft(2, '0')}"
-                                ":${_deadline!.minute.toString().padLeft(2, '0')}",
+                            : "${_deadline!.day.toString().padLeft(2, '0')}."
+                                "${_deadline!.month.toString().padLeft(2, '0')}."
+                                "${_deadline!.year} "
+                                "${_deadline!.hour.toString().padLeft(2, '0')}:"
+                                "${_deadline!.minute.toString().padLeft(2, '0')}",
                         style: const TextStyle(
                           color: AppColors.gray,
                           fontSize: 16,
@@ -297,7 +330,7 @@ class _NewTaskCreateScreenState extends State<NewTaskCreateScreen> {
                           )
                           .toList(),
                   onChanged: (value) {
-                    if (value != null) {
+                    if (value != null && mounted) {
                       setState(() {
                         _selectedUrgency = value;
                       });

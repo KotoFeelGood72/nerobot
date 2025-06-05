@@ -150,7 +150,7 @@ class _TaskScreenState extends State<TaskScreen> {
             q = FirebaseFirestore.instance
                 .collection('orders')
                 .where('active', isEqualTo: true)
-                .where('status', whereNotIn: ['success', 'preview'])
+                .where('status', isEqualTo: 'open')
                 .where('responses', arrayContains: uid);
             break;
 
