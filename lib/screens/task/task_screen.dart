@@ -146,26 +146,32 @@ class _TaskScreenState extends State<TaskScreen> {
       // --------------- WORKER ----------------
       if (role == 'worker') {
         switch (_currentFilter) {
-          case 'open': // мои отклики
+          // ─────── ОТКРЫТЫЕ ───────
+          // Показываем только документы со статусом "open"
+          case 'open':
             q = FirebaseFirestore.instance
                 .collection('orders')
                 .where('active', isEqualTo: true)
-                .where('status', isEqualTo: 'open')
-                .where('responses', arrayContains: uid);
+                .where('status', isEqualTo: 'working');
             break;
 
-          case 'history': // я был исполнителем
+          // ─────── ИСТОРИЯ ───────
+          // Показываем только документы со статусом "success"
+          case 'history':
             q = FirebaseFirestore.instance
                 .collection('orders')
-                .where('status', isEqualTo: 'success')
-                .where('workers', arrayContains: uid);
+                .where('active', isEqualTo: true)
+                .where('status', isEqualTo: 'success');
             break;
 
-          default: // tasks (новые) — всё активное, *без* моего отклика
+          // ────── НОВЫЕ (default) ──────
+          // Показываем только active == true и статус НЕ working, success и preview
+          default:
             q = FirebaseFirestore.instance
                 .collection('orders')
-                .where('active', isEqualTo: true);
-          // .where('status', whereNotIn: ['success', 'preview']);
+                .where('active', isEqualTo: true)
+                .where('deleted', isEqualTo: false)
+                .where('status', whereNotIn: ['working', 'success', 'preview']);
         }
       }
       // --------------- CUSTOMER ---------------
@@ -369,7 +375,8 @@ class _TaskScreenState extends State<TaskScreen> {
   void _onTaskTap(Map<String, dynamic> task) async {
     final orderId = task['id'].toString();
 
-    if (role == 'worker' && _currentFilter == 'open') {
+    if (role == 'worker' && _currentFilter == 'open' ||
+        _currentFilter == 'history') {
       final chatId = await _getOrCreateChat(orderId);
       if (!mounted) return;
       AutoRouter.of(context).push(ChatsRoute(chatsId: chatId, taskId: orderId));

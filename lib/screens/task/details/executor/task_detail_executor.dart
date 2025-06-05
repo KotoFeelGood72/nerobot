@@ -113,6 +113,7 @@ class _TaskDetailExecutorScreenState extends State<TaskDetailExecutorScreen> {
     final List addInfo = task!['additional'] ?? [];
     final List workers = task!['workers'] ?? [];
     final List responses = task!['responses'] ?? [];
+    final String currentStatus = task!['status'] as String;
 
     return Scaffold(
       body: Container(
@@ -221,11 +222,11 @@ class _TaskDetailExecutorScreenState extends State<TaskDetailExecutorScreen> {
             ]
             // 2) Если статус «В работе» и текущий пользователь — назначенный исполнитель,
             //    показываем кнопку «Подтвердить выполнение»
-            else if (isInWork && _iAmWorker) ...[
+            else if (isInWork && _iAmWorker && currentStatus != 'success') ...[
               SizedBox(
                 width: double.infinity,
                 child: Btn(
-                  text: 'Подтвердить выполнениеss',
+                  text: 'Подтвердить выполнение',
                   theme: 'violet',
                   // вместо openResponseModal вызываем обновление статуса
                   onPressed: _confirmExecution,
