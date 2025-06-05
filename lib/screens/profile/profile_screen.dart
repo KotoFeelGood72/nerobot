@@ -20,23 +20,28 @@ class _ProfileScreenState extends State<ProfileScreen> {
   String? role; // worker | customer
   bool isLoading = true;
 
+  bool? notifCandidate;
+  bool? notifCityTask;
+
   final String? uid = FirebaseAuth.instance.currentUser?.uid;
 
   @override
   void initState() {
     super.initState();
-    _loadUserRole();
+    _loadUserData();
   }
 
-  // ------------------------- Загрузка роли из Firestore --------------------
-  Future<void> _loadUserRole() async {
+  Future<void> _loadUserData() async {
     if (uid == null) return;
 
     final doc =
         await FirebaseFirestore.instance.collection('users').doc(uid).get();
+    final data = doc.data();
 
     setState(() {
-      role = doc.data()?['type'] ?? 'customer';
+      role = data?['type'] ?? 'customer';
+      notifCandidate = data?['notificationPreferences']?['candidate'] ?? false;
+      notifCityTask = data?['notificationPreferences']?['cityTask'] ?? false;
       isLoading = false;
     });
   }
@@ -56,6 +61,13 @@ class _ProfileScreenState extends State<ProfileScreen> {
   Future<void> _signOut() async {
     await FirebaseAuth.instance.signOut();
     if (mounted) AutoRouter.of(context).replace(const WelcomeRoute());
+  }
+
+  String get notificationSubtitle {
+    if (notifCandidate == true || notifCityTask == true) {
+      return 'Включены';
+    }
+    return 'Выключены';
   }
 
   // -------------------------------------------------------------------------
@@ -135,10 +147,15 @@ class _ProfileScreenState extends State<ProfileScreen> {
                 ),
                 ProfileOption(
                   title: 'Уведомления',
-                  subtitle: 'Включены',
-                  onTap:
-                      () =>
-                          AutoRouter.of(context).push(const ProfileNoteRoute()),
+                  subtitle: notificationSubtitle,
+                  onTap: () async {
+                    final result = await AutoRouter.of(
+                      context,
+                    ).push(const ProfileNoteRoute());
+                    if (result == true) {
+                      _loadUserData();
+                    }
+                  },
                 ),
                 ProfileOption(
                   title: 'Подписка',

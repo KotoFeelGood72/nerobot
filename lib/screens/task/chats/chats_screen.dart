@@ -4,6 +4,7 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
 import 'package:nerobot/components/ui/Btn.dart';
+import 'package:nerobot/constants/app_colors.dart';
 import 'package:nerobot/screens/task/chats/ui/message_bubble.dart';
 import 'package:nerobot/screens/task/chats/ui/message_input.dart';
 import 'package:nerobot/router/app_router.gr.dart';
@@ -109,7 +110,6 @@ class ChatsScreen extends StatelessWidget {
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
-        // Заголовок через FutureBuilder: пока ждём имени – показываем «Загрузка…»
         title: FutureBuilder<String>(
           future: _chatTitle(),
           builder: (context, snapshot) {
@@ -119,7 +119,6 @@ class ChatsScreen extends StatelessWidget {
             if (snapshot.hasError) {
               return const Text('Чат');
             }
-            // snapshot.data может быть null (если, например, участник не найден)
             final titleText = snapshot.data ?? 'Чат';
             return Text(titleText);
           },
@@ -132,48 +131,53 @@ class ChatsScreen extends StatelessWidget {
         ],
       ),
 
-      body: Column(
-        children: [
-          // ---------- Сообщения ----------
-          Expanded(
-            child: StreamBuilder<DocumentSnapshot<Map<String, dynamic>>>(
-              stream: _chatStream,
-              builder: (context, snap) {
-                if (snap.connectionState == ConnectionState.waiting) {
-                  return const Center(child: CircularProgressIndicator());
-                }
-                if (!snap.hasData || !snap.data!.exists) {
-                  return const Center(child: Text('Чат не найден'));
-                }
+      body: Container(
+        decoration: BoxDecoration(
+          border: Border(top: BorderSide(width: 1, color: AppColors.border)),
+        ),
+        child: Column(
+          children: [
+            // ---------- Сообщения ----------
+            Expanded(
+              child: StreamBuilder<DocumentSnapshot<Map<String, dynamic>>>(
+                stream: _chatStream,
+                builder: (context, snap) {
+                  if (snap.connectionState == ConnectionState.waiting) {
+                    return const Center(child: CircularProgressIndicator());
+                  }
+                  if (!snap.hasData || !snap.data!.exists) {
+                    return const Center(child: Text('Чат не найден'));
+                  }
 
-                final data = snap.data!.data();
-                final List msgs =
-                    (data?['messages'] ?? [])..sort(
-                      (a, b) => (b['date_time'] as num).compareTo(
-                        a['date_time'] as num,
-                      ),
-                    ); // новейшие сверху
+                  final data = snap.data!.data();
+                  final List msgs =
+                      (data?['messages'] ?? [])..sort(
+                        (a, b) => (b['date_time'] as num).compareTo(
+                          a['date_time'] as num,
+                        ),
+                      ); // новейшие сверху
 
-                if (msgs.isEmpty) {
-                  return const Center(child: Text('Нет сообщений'));
-                }
+                  if (msgs.isEmpty) {
+                    return const Center(child: Text('Нет сообщений'));
+                  }
 
-                return ListView.builder(
-                  reverse: true,
-                  itemCount: msgs.length,
-                  itemBuilder: (context, index) {
-                    final m = msgs[index] as Map<String, dynamic>;
-                    final isMine = m['sender'] == _myUid;
-                    return MessageBubble(message: m, isMine: isMine);
-                  },
-                );
-              },
+                  return ListView.builder(
+                    reverse: true,
+                    itemCount: msgs.length,
+                    itemBuilder: (context, index) {
+                      final m = msgs[index] as Map<String, dynamic>;
+                      final isMine = m['sender'] == _myUid;
+                      return MessageBubble(message: m, isMine: isMine);
+                    },
+                  );
+                },
+              ),
             ),
-          ),
 
-          // ---------- Поле ввода нового сообщения ----------
-          MessageInput(chatId: chatsId, orderId: taskId),
-        ],
+            // ---------- Поле ввода нового сообщения ----------
+            MessageInput(chatId: chatsId, orderId: taskId),
+          ],
+        ),
       ),
     );
   }
