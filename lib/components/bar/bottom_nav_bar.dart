@@ -57,13 +57,13 @@ class BottomNavBar extends StatelessWidget {
       onTap: (index) {
         switch (index) {
           case 0:
-            // context.router.push(const TaskRoute());
+            context.router.push(const TaskRoute());
             break;
           case 1:
             context.router.push(ProfileRoute());
             break;
           case 2:
-            // context.router.push(const TaskRoute());
+            context.router.push(const VacansyRoute());
             break;
           case 3:
             context.router.push(ProfileRoute());

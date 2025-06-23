@@ -30,6 +30,8 @@ class _ProfileUserDataScreenState extends State<ProfileUserDataScreen> {
   Future<void> _loadUserData() async {
     final uid = FirebaseAuth.instance.currentUser?.uid;
     if (uid == null) {
+      // Проверяем mounted прежде чем вызывать setState
+      if (!mounted) return;
       setState(() {
         error = "Пользователь не найден";
         isLoading = false;
@@ -40,6 +42,10 @@ class _ProfileUserDataScreenState extends State<ProfileUserDataScreen> {
     try {
       final doc =
           await FirebaseFirestore.instance.collection('users').doc(uid).get();
+
+      // Сразу же проверяем mounted перед тем, как обновить состояние
+      if (!mounted) return;
+
       if (doc.exists) {
         setState(() {
           userData = doc.data();
@@ -52,6 +58,7 @@ class _ProfileUserDataScreenState extends State<ProfileUserDataScreen> {
         });
       }
     } catch (e) {
+      if (!mounted) return;
       setState(() {
         error = e.toString();
         isLoading = false;
@@ -141,6 +148,8 @@ class _ProfileUserDataScreenState extends State<ProfileUserDataScreen> {
                           context,
                         ).push(const ProfileEditRoute());
                         // после возврата — обновляем данные
+                        // Но опять же: обновляем только если mounted == true
+                        if (!mounted) return;
                         _loadUserData();
                       },
                       theme: 'violet',

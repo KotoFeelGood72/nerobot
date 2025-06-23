@@ -120,14 +120,6 @@ class _NewConfirmTaskScreenState extends State<NewConfirmTaskScreen> {
       // Подготовим данные для записи:
       final data = widget.draft.toFirestoreMap();
 
-      // Если в модели .toFirestoreMap() используется:
-      //   "begin_at": date.millisecondsSinceEpoch,
-      //   "execution_time": executionTime.inMilliseconds,
-      // то draft.date уже указывает на момент создания,
-      // draft.executionTime — Duration до дедлайна.
-
-      // Если вы хотите в коллекции ‘orders’ хранить еще абсолютный дедлайн,
-      // можно добавить поле "deadline": taskDeadline.millisecondsSinceEpoch.
       data["deadline"] = taskDeadline!.millisecondsSinceEpoch;
 
       await FirebaseFirestore.instance.collection('orders').add(data);

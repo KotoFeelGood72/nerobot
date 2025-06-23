@@ -84,7 +84,7 @@ class _ModalBodyState extends State<_ModalBody> {
       if (!mounted) return;
 
       // Закрываем модалку и показываем SnackBar
-      Navigator.of(context).pop();
+      AutoRouter.of(context).replace(TaskRoute());
       ScaffoldMessenger.of(
         context,
       ).showSnackBar(const SnackBar(content: Text('Отклик отправлен')));

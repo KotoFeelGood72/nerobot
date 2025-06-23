@@ -44,73 +44,101 @@ class CardTask extends StatelessWidget {
       deadlineText = _humanizeDuration(diff);
     }
 
+    // Флаг: считается ли эта задача «новой»
+    final bool isNew = task['isNew'] == true;
+
     return InkWell(
       onTap: onTap,
       borderRadius: BorderRadius.circular(12),
-      child: Container(
-        padding: const EdgeInsets.all(16),
-        decoration: BoxDecoration(
-          color: Colors.white,
-          borderRadius: BorderRadius.circular(12),
-          boxShadow: [
-            BoxShadow(
-              color: Colors.black.withOpacity(0.05),
-              blurRadius: 10,
-              offset: const Offset(0, 5),
+      child: Stack(
+        clipBehavior: Clip.none,
+        children: [
+          // Сама карточка
+          Container(
+            padding: const EdgeInsets.all(16),
+            decoration: BoxDecoration(
+              color: Colors.white,
+              borderRadius: BorderRadius.circular(12),
+              boxShadow: [
+                BoxShadow(
+                  color: Colors.black.withOpacity(0.05),
+                  blurRadius: 10,
+                  offset: const Offset(0, 5),
+                ),
+              ],
             ),
-          ],
-        ),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            // ---- заголовок + дата создания ----------------------------------
-            Row(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Expanded(
-                  child: Text(
-                    task['title'] ?? 'Без названия',
-                    style: const TextStyle(
-                      fontSize: 16,
-                      fontWeight: FontWeight.bold,
-                      color: Colors.black,
+                // ---- заголовок + дата создания ----------------------------------
+                Row(
+                  children: [
+                    Expanded(
+                      child: Text(
+                        task['title'] ?? 'Без названия',
+                        style: const TextStyle(
+                          fontSize: 16,
+                          fontWeight: FontWeight.bold,
+                          color: Colors.black,
+                        ),
+                      ),
                     ),
-                  ),
+                    Text(
+                      created != null ? formatRuDate(created) : 'Неизвестно',
+                      style: TextStyle(fontSize: 12, color: Colors.grey[500]),
+                    ),
+                  ],
                 ),
+                const SizedBox(height: 8),
+                // ---- цена + «через …» ------------------------------------------
+                Row(
+                  children: [
+                    const Icon(
+                      Icons.currency_ruble,
+                      size: 18,
+                      color: Colors.grey,
+                    ),
+                    const SizedBox(width: 4),
+                    Text(
+                      '${task['price'] ?? '-'}',
+                      style: const TextStyle(fontSize: 14, color: Colors.grey),
+                    ),
+                    const SizedBox(width: 16),
+                    const Icon(Icons.access_time, size: 18, color: Colors.grey),
+                    const SizedBox(width: 4),
+                    Text(
+                      deadlineText, // ← здесь теперь разница во времени
+                      style: const TextStyle(fontSize: 14, color: Colors.grey),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 8),
+                // ---- описание ---------------------------------------------------
                 Text(
-                  created != null ? formatRuDate(created) : 'Неизвестно',
-                  style: TextStyle(fontSize: 12, color: Colors.grey[500]),
+                  task['description'] ?? 'Описание отсутствует',
+                  style: const TextStyle(fontSize: 14, color: Colors.grey),
+                  maxLines: 2,
+                  overflow: TextOverflow.ellipsis,
                 ),
               ],
             ),
-            const SizedBox(height: 8),
-            // ---- цена + «через …» ------------------------------------------
-            Row(
-              children: [
-                const Icon(Icons.currency_ruble, size: 18, color: Colors.grey),
-                const SizedBox(width: 4),
-                Text(
-                  '${task['price'] ?? '-'}',
-                  style: const TextStyle(fontSize: 14, color: Colors.grey),
+          ),
+
+          // Если задача новая – рисуем маленький красный кружок в правом углу
+          if (isNew)
+            Positioned(
+              top: -4,
+              right: -4,
+              child: Container(
+                width: 12,
+                height: 12,
+                decoration: const BoxDecoration(
+                  color: Colors.red,
+                  shape: BoxShape.circle,
                 ),
-                const SizedBox(width: 16),
-                const Icon(Icons.access_time, size: 18, color: Colors.grey),
-                const SizedBox(width: 4),
-                Text(
-                  deadlineText, // ← здесь теперь разница во времени
-                  style: const TextStyle(fontSize: 14, color: Colors.grey),
-                ),
-              ],
+              ),
             ),
-            const SizedBox(height: 8),
-            // ---- описание ---------------------------------------------------
-            Text(
-              task['description'] ?? 'Описание отсутствует',
-              style: const TextStyle(fontSize: 14, color: Colors.grey),
-              maxLines: 2,
-              overflow: TextOverflow.ellipsis,
-            ),
-          ],
-        ),
+        ],
       ),
     );
   }

@@ -83,7 +83,7 @@ class _ProfileEditScreenState extends State<ProfileEditScreen> {
         'image_url': photoUrl ?? '',
       });
 
-      if (mounted) AutoRouter.of(context).replaceAll([ProfileRoute()]);
+      if (mounted) AutoRouter.of(context).replaceAll([TaskRoute()]);
     } finally {
       if (mounted) setState(() => _inProcess = false);
     }
