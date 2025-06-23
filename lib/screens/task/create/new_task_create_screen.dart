@@ -31,6 +31,9 @@ class _NewTaskCreateScreenState extends State<NewTaskCreateScreen> {
   final _priceController = TextEditingController();
   final _descriptionController = TextEditingController();
 
+  bool _isManualAddress = false;
+  final _manualAddressController = TextEditingController();
+
   LatLng? _selectedLocation;
   String? _selectedAddress;
 
@@ -79,6 +82,31 @@ class _NewTaskCreateScreenState extends State<NewTaskCreateScreen> {
       // В случае ошибки просто не обновляем локацию
       debugPrint("Ошибка при получении геопозиции: $e");
     }
+  }
+
+  void _updateAddressMode(String mode) {
+    setState(() {
+      _isManualAddress = mode == 'manual';
+      if (!_isManualAddress) _manualAddressController.clear();
+    });
+  }
+
+  Widget _addressModeChip({required bool active, required String label}) {
+    return Container(
+      padding: const EdgeInsets.symmetric(vertical: 10),
+      decoration: BoxDecoration(
+        color: active ? AppColors.white : Colors.transparent,
+        borderRadius: BorderRadius.circular(30),
+      ),
+      alignment: Alignment.center,
+      child: Text(
+        label,
+        style: TextStyle(
+          color: active ? AppColors.black : AppColors.gray,
+          fontWeight: FontWeight.w500,
+        ),
+      ),
+    );
   }
 
   Future<void> _getAddressFromLatLng(LatLng location) async {
@@ -163,7 +191,11 @@ class _NewTaskCreateScreenState extends State<NewTaskCreateScreen> {
     final price = int.tryParse(_priceController.text.trim()) ?? 0;
     final deadline = _deadline;
     final location = _selectedLocation;
-    final address = _selectedAddress;
+    final address =
+        _isManualAddress
+            ? _manualAddressController.text.trim()
+            : _selectedAddress;
+
     final urgency = _selectedUrgency;
     final user = FirebaseAuth.instance.currentUser;
     final description = _descriptionController.text.trim();
@@ -172,6 +204,13 @@ class _NewTaskCreateScreenState extends State<NewTaskCreateScreen> {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(content: Text("Описание не может быть пустым")),
       );
+      return;
+    }
+
+    if (address == null || address.isEmpty) {
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(const SnackBar(content: Text("Укажите адрес задания")));
       return;
     }
 
@@ -251,7 +290,7 @@ class _NewTaskCreateScreenState extends State<NewTaskCreateScreen> {
     _nameController.dispose();
     _priceController.dispose();
     _descriptionController.dispose();
-
+    _manualAddressController.dispose();
     super.dispose();
   }
 
@@ -339,83 +378,108 @@ class _NewTaskCreateScreenState extends State<NewTaskCreateScreen> {
                   ),
                 ),
               ),
+
               const SizedBox(height: 16),
 
-              // Срочность (Dropdown)
-              // const Text("Срочность", style: TextStyle(fontSize: 16)),
-              // const SizedBox(height: 8),
-              // Container(
-              //   padding: const EdgeInsets.symmetric(horizontal: 12),
-              //   decoration: BoxDecoration(
-              //     color: AppColors.ulight,
-              //     borderRadius: BorderRadius.circular(8),
-              //   ),
-              //   child: DropdownButton<String>(
-              //     underline: const SizedBox(),
-              //     value: _selectedUrgency,
-              //     isExpanded: true,
-              //     icon: const Icon(
-              //       Icons.arrow_drop_down,
-              //       color: AppColors.gray,
-              //     ),
-              //     items:
-              //         _urgencyOptions
-              //             .map(
-              //               (urg) => DropdownMenuItem(
-              //                 value: urg,
-              //                 child: Text(
-              //                   urg[0].toUpperCase() + urg.substring(1),
-              //                   style: const TextStyle(color: AppColors.black),
-              //                 ),
-              //               ),
-              //             )
-              //             .toList(),
-              //     onChanged: (value) {
-              //       if (value != null && mounted) {
-              //         setState(() {
-              //           _selectedUrgency = value;
-              //         });
-              //       }
-              //     },
-              //   ),
-              // ),
-              // const SizedBox(height: 16),
-
-              // Локация
               const Text(
-                "Локация",
+                "Способ указания адреса",
                 style: TextStyle(
-                  color: AppColors.gray,
                   fontSize: 14,
                   fontWeight: FontWeight.w500,
+                  color: AppColors.gray,
                 ),
               ),
               const SizedBox(height: 8),
-              GestureDetector(
-                onTap: _openLocationPicker,
-                child: Container(
-                  padding: const EdgeInsets.all(16),
-                  decoration: BoxDecoration(
-                    color: AppColors.ulight,
-                    borderRadius: BorderRadius.circular(8),
-                  ),
-                  child: Row(
-                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                    children: [
-                      Expanded(
-                        child: Text(
-                          _selectedAddress ?? "Определение адреса...",
-                          style: const TextStyle(
-                            color: AppColors.gray,
-                            fontSize: 16,
-                          ),
+              Container(
+                padding: const EdgeInsets.all(2),
+                decoration: BoxDecoration(
+                  color: AppColors.ulight,
+                  borderRadius: BorderRadius.circular(30),
+                  border: Border.all(width: 1, color: AppColors.border),
+                ),
+                child: Row(
+                  children: [
+                    Expanded(
+                      child: GestureDetector(
+                        onTap: () => _updateAddressMode('auto'),
+                        child: _addressModeChip(
+                          active: !_isManualAddress,
+                          label: 'Автоопределение',
                         ),
                       ),
-                      const Icon(Icons.map_outlined, color: AppColors.gray),
-                    ],
-                  ),
+                    ),
+                    Expanded(
+                      child: GestureDetector(
+                        onTap: () => _updateAddressMode('manual'),
+                        child: _addressModeChip(
+                          active: _isManualAddress,
+                          label: 'Ввести вручную',
+                        ),
+                      ),
+                    ),
+                  ],
                 ),
               ),
+              const SizedBox(height: 16),
+
+              if (_isManualAddress)
+                // Ручной ввод адреса
+                Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Inputs(
+                      controller: _priceController,
+                      backgroundColor: AppColors.ulight,
+                      textColor: AppColors.gray,
+                      label: 'Адрес',
+                    ),
+                  ],
+                )
+              else
+                // Автоопределение + карта
+                Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    const Text(
+                      "Локация",
+                      style: TextStyle(
+                        color: AppColors.gray,
+                        fontSize: 14,
+                        fontWeight: FontWeight.w500,
+                      ),
+                    ),
+                    const SizedBox(height: 8),
+                    GestureDetector(
+                      onTap: _openLocationPicker,
+                      child: Container(
+                        padding: const EdgeInsets.all(16),
+                        decoration: BoxDecoration(
+                          color: AppColors.ulight,
+                          borderRadius: BorderRadius.circular(8),
+                          border: Border.all(width: 1, color: AppColors.border),
+                        ),
+                        child: Row(
+                          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                          children: [
+                            Expanded(
+                              child: Text(
+                                _selectedAddress ?? "Определение адреса...",
+                                style: const TextStyle(
+                                  color: AppColors.gray,
+                                  fontSize: 16,
+                                ),
+                              ),
+                            ),
+                            const Icon(
+                              Icons.map_outlined,
+                              color: AppColors.gray,
+                            ),
+                          ],
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
               const SizedBox(height: 32),
 
               // Описание
