@@ -29,6 +29,8 @@ class NewTaskCreateScreen extends StatefulWidget {
 class _NewTaskCreateScreenState extends State<NewTaskCreateScreen> {
   final _nameController = TextEditingController();
   final _priceController = TextEditingController();
+  final _descriptionController = TextEditingController();
+
   LatLng? _selectedLocation;
   String? _selectedAddress;
 
@@ -156,7 +158,7 @@ class _NewTaskCreateScreenState extends State<NewTaskCreateScreen> {
     });
   }
 
-  void _onNextPressed() {
+  void _onNextPressed() async {
     final name = _nameController.text.trim();
     final price = int.tryParse(_priceController.text.trim()) ?? 0;
     final deadline = _deadline;
@@ -164,6 +166,14 @@ class _NewTaskCreateScreenState extends State<NewTaskCreateScreen> {
     final address = _selectedAddress;
     final urgency = _selectedUrgency;
     final user = FirebaseAuth.instance.currentUser;
+    final description = _descriptionController.text.trim();
+
+    if (description.isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text("Описание не может быть пустым")),
+      );
+      return;
+    }
 
     // Проверка: все поля должны быть заполнены
     if (name.isEmpty ||
@@ -200,30 +210,48 @@ class _NewTaskCreateScreenState extends State<NewTaskCreateScreen> {
       executionTime: duration, // запись Duration вместо абсолютного времени
       urgency: urgency,
       deleted: false,
+      description: description,
+
       // description пока не передаём — заполним на следующем экране
     );
 
-    // Переходим на экран ввода описания, передавая draft
-    context.router
-        .push(NewDescRoute(draft: draft))
-        .then((_) {
-          // Этот callback срабатывает, когда вернулись обратно с экрана описания.
-          // Проверяем, что экран всё ещё «монтирован», прежде чем вызывать setState
-          if (!mounted) return;
-          setState(() => _isLoading = false);
-        })
-        .catchError((e) {
-          // Если push завершился с ошибкой, тоже отключаем индикатор
-          if (!mounted) return;
-          setState(() => _isLoading = false);
-          debugPrint("Ошибка при навигации: $e");
-        });
+    try {
+      final data = draft.toFirestoreMap();
+      data["deadline"] = deadline.millisecondsSinceEpoch;
+
+      await FirebaseFirestore.instance.collection('orders').add(data);
+
+      if (!mounted) return;
+
+      // ✅ Показываем SnackBar перед переходом
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text("Задание успешно опубликовано"),
+          backgroundColor: Colors.green,
+          duration: Duration(seconds: 2),
+        ),
+      );
+
+      // Немного ждём, чтобы пользователь увидел SnackBar:
+      await Future.delayed(const Duration(seconds: 2));
+
+      // Навигация обратно к списку заданий:
+      context.router.replaceAll([const TaskRoute()]);
+    } catch (e) {
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text('Ошибка при размещении: $e')));
+    } finally {
+      if (mounted) setState(() => _isLoading = false);
+    }
   }
 
   @override
   void dispose() {
     _nameController.dispose();
     _priceController.dispose();
+    _descriptionController.dispose();
+
     super.dispose();
   }
 
@@ -267,81 +295,101 @@ class _NewTaskCreateScreenState extends State<NewTaskCreateScreen> {
               const SizedBox(height: 16),
 
               // Срок выполнения (дата + время)
-              const Text("Срок выполнения", style: TextStyle(fontSize: 16)),
+              const Text(
+                "Срок выполнения",
+                style: TextStyle(
+                  color: AppColors.gray,
+                  fontSize: 14,
+                  fontWeight: FontWeight.w500,
+                ),
+              ),
               const SizedBox(height: 8),
-              GestureDetector(
-                onTap: _pickDeadline,
-                child: Container(
-                  padding: const EdgeInsets.all(16),
-                  decoration: BoxDecoration(
-                    color: AppColors.ulight,
-                    borderRadius: BorderRadius.circular(8),
-                  ),
-                  child: Row(
-                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                    children: [
-                      Text(
-                        _deadline == null
-                            ? "Выбрать дату и время"
-                            : "${_deadline!.day.toString().padLeft(2, '0')}."
-                                "${_deadline!.month.toString().padLeft(2, '0')}."
-                                "${_deadline!.year} "
-                                "${_deadline!.hour.toString().padLeft(2, '0')}:"
-                                "${_deadline!.minute.toString().padLeft(2, '0')}",
-                        style: const TextStyle(
-                          color: AppColors.gray,
-                          fontSize: 16,
+              Container(
+                decoration: BoxDecoration(
+                  border: Border.all(color: AppColors.border, width: 1),
+                  borderRadius: BorderRadius.circular(8),
+                ),
+                child: GestureDetector(
+                  onTap: _pickDeadline,
+                  child: Container(
+                    padding: const EdgeInsets.all(16),
+                    decoration: BoxDecoration(
+                      color: AppColors.ulight,
+                      borderRadius: BorderRadius.circular(8),
+                    ),
+                    child: Row(
+                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                      children: [
+                        Text(
+                          _deadline == null
+                              ? "Выбрать дату и время"
+                              : "${_deadline!.day.toString().padLeft(2, '0')}."
+                                  "${_deadline!.month.toString().padLeft(2, '0')}."
+                                  "${_deadline!.year} "
+                                  "${_deadline!.hour.toString().padLeft(2, '0')}:"
+                                  "${_deadline!.minute.toString().padLeft(2, '0')}",
+                          style: const TextStyle(
+                            color: AppColors.gray,
+                            fontSize: 16,
+                          ),
                         ),
-                      ),
-                      const Icon(Icons.schedule, color: AppColors.gray),
-                    ],
+                        const Icon(Icons.schedule, color: AppColors.gray),
+                      ],
+                    ),
                   ),
                 ),
               ),
               const SizedBox(height: 16),
 
               // Срочность (Dropdown)
-              const Text("Срочность", style: TextStyle(fontSize: 16)),
-              const SizedBox(height: 8),
-              Container(
-                padding: const EdgeInsets.symmetric(horizontal: 12),
-                decoration: BoxDecoration(
-                  color: AppColors.ulight,
-                  borderRadius: BorderRadius.circular(8),
-                ),
-                child: DropdownButton<String>(
-                  underline: const SizedBox(),
-                  value: _selectedUrgency,
-                  isExpanded: true,
-                  icon: const Icon(
-                    Icons.arrow_drop_down,
-                    color: AppColors.gray,
-                  ),
-                  items:
-                      _urgencyOptions
-                          .map(
-                            (urg) => DropdownMenuItem(
-                              value: urg,
-                              child: Text(
-                                urg[0].toUpperCase() + urg.substring(1),
-                                style: const TextStyle(color: AppColors.black),
-                              ),
-                            ),
-                          )
-                          .toList(),
-                  onChanged: (value) {
-                    if (value != null && mounted) {
-                      setState(() {
-                        _selectedUrgency = value;
-                      });
-                    }
-                  },
-                ),
-              ),
-              const SizedBox(height: 16),
+              // const Text("Срочность", style: TextStyle(fontSize: 16)),
+              // const SizedBox(height: 8),
+              // Container(
+              //   padding: const EdgeInsets.symmetric(horizontal: 12),
+              //   decoration: BoxDecoration(
+              //     color: AppColors.ulight,
+              //     borderRadius: BorderRadius.circular(8),
+              //   ),
+              //   child: DropdownButton<String>(
+              //     underline: const SizedBox(),
+              //     value: _selectedUrgency,
+              //     isExpanded: true,
+              //     icon: const Icon(
+              //       Icons.arrow_drop_down,
+              //       color: AppColors.gray,
+              //     ),
+              //     items:
+              //         _urgencyOptions
+              //             .map(
+              //               (urg) => DropdownMenuItem(
+              //                 value: urg,
+              //                 child: Text(
+              //                   urg[0].toUpperCase() + urg.substring(1),
+              //                   style: const TextStyle(color: AppColors.black),
+              //                 ),
+              //               ),
+              //             )
+              //             .toList(),
+              //     onChanged: (value) {
+              //       if (value != null && mounted) {
+              //         setState(() {
+              //           _selectedUrgency = value;
+              //         });
+              //       }
+              //     },
+              //   ),
+              // ),
+              // const SizedBox(height: 16),
 
               // Локация
-              const Text("Локация", style: TextStyle(fontSize: 16)),
+              const Text(
+                "Локация",
+                style: TextStyle(
+                  color: AppColors.gray,
+                  fontSize: 14,
+                  fontWeight: FontWeight.w500,
+                ),
+              ),
               const SizedBox(height: 8),
               GestureDetector(
                 onTap: _openLocationPicker,
@@ -370,9 +418,41 @@ class _NewTaskCreateScreenState extends State<NewTaskCreateScreen> {
               ),
               const SizedBox(height: 32),
 
+              // Описание
+              const Text(
+                "Описание",
+                style: TextStyle(
+                  color: AppColors.gray,
+                  fontSize: 14,
+                  fontWeight: FontWeight.w500,
+                ),
+              ),
+              const SizedBox(height: 8),
+              Container(
+                decoration: BoxDecoration(
+                  border: Border.all(width: 1, color: AppColors.border),
+                  borderRadius: BorderRadius.circular(8),
+                  color: AppColors.bg,
+                ),
+                child: TextField(
+                  controller: _descriptionController,
+                  maxLines: null,
+                  maxLength: 300,
+                  keyboardType: TextInputType.multiline,
+                  decoration: const InputDecoration(
+                    hintText:
+                        "Опишите ваше задание максимально подробно и понятно...",
+                    hintStyle: TextStyle(color: AppColors.gray),
+                    border: OutlineInputBorder(),
+                    counterText: '',
+                  ),
+                ),
+              ),
+              const SizedBox(height: 16),
+
               // Кнопка “Далее”
               Btn(
-                text: _isLoading ? "Загрузка..." : "Далее: Описание",
+                text: _isLoading ? "Загрузка..." : "Создать задание",
                 onPressed: _isLoading ? null : _onNextPressed,
                 theme: 'violet',
               ),

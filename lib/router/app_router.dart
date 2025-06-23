@@ -33,16 +33,11 @@ class AppRouter extends RootStackRouter {
       path: '/task/new',
       guards: [_authGuard],
     ),
-    AutoRoute(
-      page: NewDescRoute.page,
-      path: '/task/new/description',
-      guards: [_authGuard],
-    ),
-    AutoRoute(
-      page: NewConfirmTaskRoute.page,
-      path: '/task/new/confirm',
-      guards: [_authGuard],
-    ),
+    // AutoRoute(
+    //   page: NewConfirmTaskRoute.page,
+    //   path: '/task/new/confirm',
+    //   guards: [_authGuard],
+    // ),
     AutoRoute(
       page: TaskDetailRoute.page,
       path: '/task/detail/:taskId',
