@@ -6,8 +6,10 @@ import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
 import 'package:nerobot/components/bar/bottom_nav_bar.dart';
 import 'package:nerobot/components/list/task_list.dart';
+import 'package:nerobot/components/ui/task_filters.dart';
 import 'package:nerobot/constants/app_colors.dart';
 import 'package:nerobot/router/app_router.gr.dart';
+import 'package:nerobot/utils/task_loader.dart';
 
 @RoutePage()
 class TaskScreen extends StatefulWidget {
@@ -132,74 +134,30 @@ class _TaskScreenState extends State<TaskScreen> {
   }
   // =================================================
 
-  // ================= LOAD TASKS ====================
-  Future<void> _loadTasks() async {
+  Future<void> _loadTasks({
+    DateTime? startDate,
+    DateTime? endDate,
+    double? minPrice,
+    double? maxPrice,
+    double? radiusKm,
+    GeoPoint? userLocation,
+  }) async {
     try {
       setState(() {
         isLoading = true;
         error = null;
       });
 
-      final uid = FirebaseAuth.instance.currentUser!.uid;
-      late Query<Map<String, dynamic>> q;
-
-      // --------------- WORKER ----------------
-      if (role == 'worker') {
-        switch (_currentFilter) {
-          // ─────── ОТКРЫТЫЕ ───────
-          // Показываем только документы со статусом "open"
-          case 'open':
-            q = FirebaseFirestore.instance
-                .collection('orders')
-                .where('status', whereIn: ['open', 'preview', 'working'])
-                .where('responses', arrayContains: uid);
-            break;
-
-          // ─────── ИСТОРИЯ ───────
-          // Показываем только документы со статусом "success"
-          case 'history':
-            q = FirebaseFirestore.instance
-                .collection('orders')
-                .where('active', isEqualTo: true)
-                .where('status', isEqualTo: 'success');
-            break;
-
-          // ────── НОВЫЕ (default) ──────
-          // Показываем только active == true и статус НЕ working, success и preview
-          default:
-            q = FirebaseFirestore.instance
-                .collection('orders')
-                .where('active', isEqualTo: true)
-                .where('deleted', isEqualTo: false)
-                .where('status', whereNotIn: ['working', 'success', 'preview']);
-        }
-      }
-      // --------------- CUSTOMER ---------------
-      else {
-        if (_currentFilter == 'history') {
-          q = FirebaseFirestore.instance
-              .collection('orders')
-              .where('creator', isEqualTo: uid)
-              .where('status', isEqualTo: 'success');
-        } else {
-          q = FirebaseFirestore.instance
-              .collection('orders')
-              .where('creator', isEqualTo: uid);
-          // .where('status', whereNotIn: ['success', 'preview']);
-        }
-      }
-
-      final snap = await q.get();
-      var data = snap.docs.map((d) => {...d.data(), 'id': d.id}).toList();
-
-      // фильтр «tasks» для worker: убираем, если уже откликнулся
-      if (role == 'worker' && _currentFilter == 'tasks') {
-        data =
-            data.where((t) {
-              final List resps = (t['responses'] ?? []) as List;
-              return !resps.contains(uid);
-            }).toList();
-      }
+      final data = await loadTasks(
+        role: role!,
+        currentFilter: _currentFilter,
+        startDate: startDate,
+        endDate: endDate,
+        minPrice: minPrice,
+        maxPrice: maxPrice,
+        radiusKm: radiusKm,
+        userLocation: userLocation,
+      );
 
       setState(() => tasks = data);
     } catch (e) {
@@ -208,9 +166,7 @@ class _TaskScreenState extends State<TaskScreen> {
       if (mounted) setState(() => isLoading = false);
     }
   }
-  // =================================================
 
-  // =================== UI ==========================
   @override
   Widget build(BuildContext context) {
     if (role == null) {
@@ -310,7 +266,19 @@ class _TaskScreenState extends State<TaskScreen> {
           padding: const EdgeInsets.all(16),
           child: Column(
             children: [
-              // ---------- Список задач (с учётом поиска) ----------
+              TaskFilters(
+                onApply: (params) async {
+                  await _loadTasks(
+                    startDate: params['startDate'],
+                    endDate: params['endDate'],
+                    minPrice: params['minPrice'],
+                    maxPrice: params['maxPrice'],
+                    radiusKm: params['radiusKm'],
+                    userLocation: params['userLocation'],
+                  );
+                },
+              ),
+
               Expanded(
                 child: TaskList(
                   tasks: _filteredTasks,

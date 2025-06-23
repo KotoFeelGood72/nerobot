@@ -10,7 +10,6 @@ class TaskDraft {
   String address;
   String creatorUid;
   Duration executionTime; // ← убрали final, теперь mutable
-  String urgency;
   bool deleted;
   String? description;
 
@@ -22,7 +21,6 @@ class TaskDraft {
     required this.address,
     required this.creatorUid,
     required this.executionTime,
-    required this.urgency,
     required this.deleted,
     this.description,
   });
@@ -39,7 +37,6 @@ class TaskDraft {
       "address": address,
       "begin_at": date.millisecondsSinceEpoch,
       "execution_time": executionTime.inMilliseconds,
-      "urgency": urgency,
       "deleted": deleted,
       "created_date": createdAt,
       "creator": creatorUid,

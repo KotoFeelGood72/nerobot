@@ -45,15 +45,19 @@ class _NewTaskCreateScreenState extends State<NewTaskCreateScreen> {
 
   bool _isLoading = false;
 
-  // Варианты срочности
-  final List<String> _urgencyOptions = ['низкая', 'средняя', 'высокая'];
+  final List<String> _paymentOptions = [
+    "За час",
+    "За смену",
+    "За неделю",
+    "За месяц",
+  ];
+  String? _paymentFor = "За смену";
 
   @override
   void initState() {
     super.initState();
     // По умолчанию ставим дедлайн через час от момента открытия экрана
     _deadline = DateTime.now().add(const Duration(hours: 1));
-    _selectedUrgency = _urgencyOptions[1]; // «средняя» по умолчанию
     _getCurrentLocation();
   }
 
@@ -196,9 +200,15 @@ class _NewTaskCreateScreenState extends State<NewTaskCreateScreen> {
             ? _manualAddressController.text.trim()
             : _selectedAddress;
 
-    final urgency = _selectedUrgency;
     final user = FirebaseAuth.instance.currentUser;
     final description = _descriptionController.text.trim();
+
+    if (_paymentFor == null) {
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(const SnackBar(content: Text("Выберите тип оплаты")));
+      return;
+    }
 
     if (description.isEmpty) {
       ScaffoldMessenger.of(context).showSnackBar(
@@ -214,13 +224,11 @@ class _NewTaskCreateScreenState extends State<NewTaskCreateScreen> {
       return;
     }
 
-    // Проверка: все поля должны быть заполнены
     if (name.isEmpty ||
         price <= 0 ||
         deadline == null ||
         location == null ||
         address == null ||
-        urgency == null ||
         user == null) {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(content: Text("Пожалуйста, заполните все поля")),
@@ -228,41 +236,33 @@ class _NewTaskCreateScreenState extends State<NewTaskCreateScreen> {
       return;
     }
 
-    // Переключаем индикатор загрузки
     if (!mounted) return;
     setState(() => _isLoading = true);
 
-    // Дата создания — сейчас:
     final creationDate = DateTime.now();
-
-    // Вычисляем разницу (Duration) между дедлайном и датой создания
     final duration = deadline.difference(creationDate);
 
-    // Формируем TaskDraft:
     final draft = TaskDraft(
       title: name,
       price: price,
-      date: creationDate, // сохраняем дату создания
+      date: creationDate,
       location: location,
       address: address,
       creatorUid: user.uid,
-      executionTime: duration, // запись Duration вместо абсолютного времени
-      urgency: urgency,
+      executionTime: duration,
       deleted: false,
       description: description,
-
-      // description пока не передаём — заполним на следующем экране
     );
 
     try {
       final data = draft.toFirestoreMap();
       data["deadline"] = deadline.millisecondsSinceEpoch;
+      data["payment_for"] = _paymentFor;
 
       await FirebaseFirestore.instance.collection('orders').add(data);
 
       if (!mounted) return;
 
-      // ✅ Показываем SnackBar перед переходом
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
           content: Text("Задание успешно опубликовано"),
@@ -271,10 +271,7 @@ class _NewTaskCreateScreenState extends State<NewTaskCreateScreen> {
         ),
       );
 
-      // Немного ждём, чтобы пользователь увидел SnackBar:
       await Future.delayed(const Duration(seconds: 2));
-
-      // Навигация обратно к списку заданий:
       context.router.replaceAll([const TaskRoute()]);
     } catch (e) {
       ScaffoldMessenger.of(
@@ -307,7 +304,10 @@ class _NewTaskCreateScreenState extends State<NewTaskCreateScreen> {
           ),
           centerTitle: true,
         ),
-        body: Padding(
+        body: Container(
+          decoration: BoxDecoration(
+            border: Border(top: BorderSide(width: 1, color: AppColors.border)),
+          ),
           padding: const EdgeInsets.all(16.0),
           child: ListView(
             children: [
@@ -331,6 +331,51 @@ class _NewTaskCreateScreenState extends State<NewTaskCreateScreen> {
                 maxLength: 9,
                 required: true,
               ),
+              const SizedBox(height: 16),
+              const Text(
+                "Оплата",
+                style: TextStyle(
+                  fontSize: 14,
+                  fontWeight: FontWeight.w500,
+                  color: AppColors.gray,
+                ),
+              ),
+              const SizedBox(height: 8),
+              Container(
+                padding: const EdgeInsets.symmetric(horizontal: 12),
+                decoration: BoxDecoration(
+                  color: AppColors.ulight,
+                  borderRadius: BorderRadius.circular(8),
+                  border: Border.all(color: AppColors.border),
+                ),
+                child: DropdownButton<String>(
+                  value: _paymentFor,
+                  isExpanded: true,
+                  underline: const SizedBox(),
+                  icon: const Icon(
+                    Icons.arrow_drop_down,
+                    color: AppColors.gray,
+                  ),
+                  items:
+                      _paymentOptions
+                          .map(
+                            (label) => DropdownMenuItem<String>(
+                              value: label,
+                              child: Text(
+                                label,
+                                style: const TextStyle(color: AppColors.black),
+                              ),
+                            ),
+                          )
+                          .toList(),
+                  onChanged: (value) {
+                    if (value != null && mounted) {
+                      setState(() => _paymentFor = value);
+                    }
+                  },
+                ),
+              ),
+
               const SizedBox(height: 16),
 
               // Срок выполнения (дата + время)

@@ -41,7 +41,7 @@ class TaskList extends StatelessWidget {
       itemBuilder: (context, index) {
         final task = tasks[index];
         return Padding(
-          padding: const EdgeInsets.only(bottom: 16.0),
+          padding: const EdgeInsets.only(bottom: 8.0),
           child: CardTask(task: task, onTap: () => onTaskTap?.call(task)),
         );
       },
