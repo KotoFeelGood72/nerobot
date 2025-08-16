@@ -103,7 +103,7 @@ class _ConfirmScreenState extends State<ConfirmScreen> {
               borderWidth: 1,
               focusedBorderColor: hasOtpError ? Colors.red : AppColors.violet,
               showFieldAsBox: true,
-              fieldWidth: 60,
+              fieldWidth: 50,
               fieldHeight: 48,
               onSubmit: (code) async {
                 if (code.length == 6) {

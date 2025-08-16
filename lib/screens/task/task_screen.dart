@@ -212,7 +212,7 @@ class _TaskScreenState extends State<TaskScreen> {
                   ),
                 )
                 : Text(
-                  'Задания $role',
+                  'Задания',
                   style: const TextStyle(fontWeight: FontWeight.bold),
                 ),
         centerTitle: true,
@@ -268,13 +268,17 @@ class _TaskScreenState extends State<TaskScreen> {
             children: [
               TaskFilters(
                 onApply: (params) async {
+                  print('Получены параметры фильтров: $params');
                   await _loadTasks(
-                    startDate: params['startDate'],
-                    endDate: params['endDate'],
                     minPrice: params['minPrice'],
-                    maxPrice: params['maxPrice'],
                     radiusKm: params['radiusKm'],
-                    userLocation: params['userLocation'],
+                    userLocation:
+                        params['userLocation'] != null
+                            ? GeoPoint(
+                              params['userLocation'].latitude,
+                              params['userLocation'].longitude,
+                            )
+                            : null,
                   );
                 },
               ),

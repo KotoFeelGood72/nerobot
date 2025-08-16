@@ -7,7 +7,6 @@ import 'package:nerobot/components/ui/Btn.dart';
 import 'package:nerobot/components/ui/Divider.dart';
 import 'package:nerobot/components/ui/info_row.dart';
 import 'package:nerobot/constants/app_colors.dart';
-import 'package:nerobot/router/app_router.gr.dart';
 import 'package:nerobot/utils/send_repsponse.dart';
 
 @RoutePage()

@@ -10,7 +10,12 @@ Future<bool> showExitConfirmation(BuildContext context) async {
     backgroundColor: Colors.white,
     builder: (BuildContext context) {
       return Padding(
-        padding: const EdgeInsets.all(16.0),
+        padding: const EdgeInsets.only(
+          left: 16,
+          right: 16,
+          bottom: 46,
+          top: 32,
+        ),
         child: Column(
           mainAxisSize: MainAxisSize.min,
           children: [

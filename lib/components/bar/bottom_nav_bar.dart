@@ -1,11 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:auto_route/auto_route.dart';
 
-import 'package:iconify_flutter/iconify_flutter.dart';
-import 'package:iconify_flutter/icons/ic.dart';
-import 'package:iconify_flutter/icons/mdi.dart';
-import 'package:iconify_flutter/icons/ri.dart';
-import 'package:iconify_flutter/icons/vaadin.dart';
 import 'package:nerobot/components/ui/Icons.dart';
 import 'package:nerobot/constants/app_colors.dart';
 import 'package:nerobot/router/app_router.gr.dart';
@@ -33,10 +28,10 @@ class BottomNavBar extends StatelessWidget {
           ),
           label: 'Задания',
         ),
-        BottomNavigationBarItem(
-          icon: IconWidget(iconName: 'credit', color: AppColors.gray, size: 25),
-          label: 'Счёт',
-        ),
+        // BottomNavigationBarItem(
+        //   icon: IconWidget(iconName: 'credit', color: AppColors.gray, size: 25),
+        //   label: 'Счёт',
+        // ),
         BottomNavigationBarItem(
           icon: IconWidget(
             iconName: 'vacancy',
@@ -59,13 +54,13 @@ class BottomNavBar extends StatelessWidget {
           case 0:
             context.router.push(const TaskRoute());
             break;
+          // case 1:
+          //   context.router.push(ProfileRoute());
+          //   break;
           case 1:
-            context.router.push(ProfileRoute());
-            break;
-          case 2:
             context.router.push(const VacansyRoute());
             break;
-          case 3:
+          case 2:
             context.router.push(ProfileRoute());
             break;
         }

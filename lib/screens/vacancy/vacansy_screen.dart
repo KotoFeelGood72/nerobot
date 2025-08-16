@@ -63,6 +63,32 @@ class _VacansyScreenState extends State<VacansyScreen> {
               const Expanded(child: Center(child: CircularProgressIndicator()))
             else if (error != null)
               Expanded(child: Center(child: Text('Ошибка: $error')))
+            else if (vacancies.isEmpty)
+              Expanded(
+                child: Center(
+                  child: Column(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    children: [
+                      Icon(Icons.work_outline, size: 64, color: AppColors.gray),
+                      const SizedBox(height: 16),
+                      Text(
+                        'Вакансий пока нет',
+                        style: TextStyle(
+                          fontSize: 18,
+                          fontWeight: FontWeight.w500,
+                          color: AppColors.gray,
+                        ),
+                      ),
+                      const SizedBox(height: 8),
+                      Text(
+                        'Попробуйте изменить фильтры\nили загляните позже',
+                        textAlign: TextAlign.center,
+                        style: TextStyle(fontSize: 14, color: AppColors.gray),
+                      ),
+                    ],
+                  ),
+                ),
+              )
             else
               Expanded(
                 child: ListView.builder(
@@ -108,7 +134,7 @@ class _VacansyScreenState extends State<VacansyScreen> {
                     ),
                     child: Center(
                       child: Text(
-                        f == 'all' ? 'Все' : f,
+                        _getFilterDisplayName(f),
                         style: TextStyle(
                           fontWeight: FontWeight.bold,
                           color: selected ? Colors.white : Colors.black,
@@ -121,5 +147,18 @@ class _VacansyScreenState extends State<VacansyScreen> {
             }).toList(),
       ),
     );
+  }
+
+  String _getFilterDisplayName(String filter) {
+    switch (filter) {
+      case 'all':
+        return 'Все';
+      case 'remote':
+        return 'Удаленно';
+      case 'office':
+        return 'В офисе';
+      default:
+        return filter;
+    }
   }
 }

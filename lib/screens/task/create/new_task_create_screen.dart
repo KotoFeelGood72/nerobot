@@ -9,10 +9,8 @@ import 'package:geolocator/geolocator.dart';
 import 'package:latlong2/latlong.dart';
 
 import 'package:nerobot/components/ui/Btn.dart';
-import 'package:nerobot/components/ui/Divider.dart';
 import 'package:nerobot/components/ui/Inputs.dart';
 import 'package:nerobot/components/ui/location_picker.dart';
-import 'package:nerobot/components/ui/pick_date.dart';
 import 'package:nerobot/constants/app_colors.dart';
 import 'package:nerobot/models/task_draft.dart'; // <-- импорт вашей модели
 import 'package:nerobot/router/app_router.gr.dart';
@@ -299,273 +297,281 @@ class _NewTaskCreateScreenState extends State<NewTaskCreateScreen> {
         appBar: AppBar(
           backgroundColor: AppColors.bg,
           title: const Text(
-            "Новое задание (Шаг 1/3)",
+            "Новое задание",
             style: TextStyle(fontWeight: FontWeight.bold),
           ),
           centerTitle: true,
         ),
-        body: Container(
-          decoration: BoxDecoration(
-            border: Border(top: BorderSide(width: 1, color: AppColors.border)),
-          ),
-          padding: const EdgeInsets.all(16.0),
-          child: ListView(
-            children: [
-              // Название
-              Inputs(
-                controller: _nameController,
-                backgroundColor: AppColors.ulight,
-                textColor: AppColors.gray,
-                label: 'Название',
-                required: true,
+        body: SafeArea(
+          child: Container(
+            decoration: BoxDecoration(
+              border: Border(
+                top: BorderSide(width: 1, color: AppColors.border),
               ),
-              const SizedBox(height: 16),
-
-              // Стоимость
-              Inputs(
-                controller: _priceController,
-                backgroundColor: AppColors.ulight,
-                textColor: AppColors.gray,
-                label: 'Стоимость',
-                fieldType: 'number',
-                maxLength: 9,
-                required: true,
-              ),
-              const SizedBox(height: 16),
-              const Text(
-                "Оплата",
-                style: TextStyle(
-                  fontSize: 14,
-                  fontWeight: FontWeight.w500,
-                  color: AppColors.gray,
+            ),
+            padding: const EdgeInsets.all(16.0),
+            child: ListView(
+              children: [
+                // Название
+                Inputs(
+                  controller: _nameController,
+                  backgroundColor: AppColors.ulight,
+                  textColor: AppColors.gray,
+                  label: 'Название',
+                  required: true,
                 ),
-              ),
-              const SizedBox(height: 8),
-              Container(
-                padding: const EdgeInsets.symmetric(horizontal: 12),
-                decoration: BoxDecoration(
-                  color: AppColors.ulight,
-                  borderRadius: BorderRadius.circular(8),
-                  border: Border.all(color: AppColors.border),
-                ),
-                child: DropdownButton<String>(
-                  value: _paymentFor,
-                  isExpanded: true,
-                  underline: const SizedBox(),
-                  icon: const Icon(
-                    Icons.arrow_drop_down,
+                const SizedBox(height: 16),
+                const Text(
+                  "Оплата",
+                  style: TextStyle(
+                    fontSize: 14,
+                    fontWeight: FontWeight.w500,
                     color: AppColors.gray,
                   ),
-                  items:
-                      _paymentOptions
-                          .map(
-                            (label) => DropdownMenuItem<String>(
-                              value: label,
-                              child: Text(
-                                label,
-                                style: const TextStyle(color: AppColors.black),
-                              ),
-                            ),
-                          )
-                          .toList(),
-                  onChanged: (value) {
-                    if (value != null && mounted) {
-                      setState(() => _paymentFor = value);
-                    }
-                  },
                 ),
-              ),
-
-              const SizedBox(height: 16),
-
-              // Срок выполнения (дата + время)
-              const Text(
-                "Срок выполнения",
-                style: TextStyle(
-                  color: AppColors.gray,
-                  fontSize: 14,
-                  fontWeight: FontWeight.w500,
-                ),
-              ),
-              const SizedBox(height: 8),
-              Container(
-                decoration: BoxDecoration(
-                  border: Border.all(color: AppColors.border, width: 1),
-                  borderRadius: BorderRadius.circular(8),
-                ),
-                child: GestureDetector(
-                  onTap: _pickDeadline,
-                  child: Container(
-                    padding: const EdgeInsets.all(16),
-                    decoration: BoxDecoration(
-                      color: AppColors.ulight,
-                      borderRadius: BorderRadius.circular(8),
-                    ),
-                    child: Row(
-                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                      children: [
-                        Text(
-                          _deadline == null
-                              ? "Выбрать дату и время"
-                              : "${_deadline!.day.toString().padLeft(2, '0')}."
-                                  "${_deadline!.month.toString().padLeft(2, '0')}."
-                                  "${_deadline!.year} "
-                                  "${_deadline!.hour.toString().padLeft(2, '0')}:"
-                                  "${_deadline!.minute.toString().padLeft(2, '0')}",
-                          style: const TextStyle(
-                            color: AppColors.gray,
-                            fontSize: 16,
-                          ),
-                        ),
-                        const Icon(Icons.schedule, color: AppColors.gray),
-                      ],
-                    ),
+                const SizedBox(height: 8),
+                Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 12),
+                  decoration: BoxDecoration(
+                    color: AppColors.ulight,
+                    borderRadius: BorderRadius.circular(8),
+                    border: Border.all(color: AppColors.border),
                   ),
-                ),
-              ),
-
-              const SizedBox(height: 16),
-
-              const Text(
-                "Способ указания адреса",
-                style: TextStyle(
-                  fontSize: 14,
-                  fontWeight: FontWeight.w500,
-                  color: AppColors.gray,
-                ),
-              ),
-              const SizedBox(height: 8),
-              Container(
-                padding: const EdgeInsets.all(2),
-                decoration: BoxDecoration(
-                  color: AppColors.ulight,
-                  borderRadius: BorderRadius.circular(30),
-                  border: Border.all(width: 1, color: AppColors.border),
-                ),
-                child: Row(
-                  children: [
-                    Expanded(
-                      child: GestureDetector(
-                        onTap: () => _updateAddressMode('auto'),
-                        child: _addressModeChip(
-                          active: !_isManualAddress,
-                          label: 'Автоопределение',
-                        ),
-                      ),
+                  child: DropdownButton<String>(
+                    value: _paymentFor,
+                    isExpanded: true,
+                    underline: const SizedBox(),
+                    icon: const Icon(
+                      Icons.arrow_drop_down,
+                      color: AppColors.gray,
                     ),
-                    Expanded(
-                      child: GestureDetector(
-                        onTap: () => _updateAddressMode('manual'),
-                        child: _addressModeChip(
-                          active: _isManualAddress,
-                          label: 'Ввести вручную',
-                        ),
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-              const SizedBox(height: 16),
-
-              if (_isManualAddress)
-                // Ручной ввод адреса
-                Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Inputs(
-                      controller: _priceController,
-                      backgroundColor: AppColors.ulight,
-                      textColor: AppColors.gray,
-                      label: 'Адрес',
-                    ),
-                  ],
-                )
-              else
-                // Автоопределение + карта
-                Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    const Text(
-                      "Локация",
-                      style: TextStyle(
-                        color: AppColors.gray,
-                        fontSize: 14,
-                        fontWeight: FontWeight.w500,
-                      ),
-                    ),
-                    const SizedBox(height: 8),
-                    GestureDetector(
-                      onTap: _openLocationPicker,
-                      child: Container(
-                        padding: const EdgeInsets.all(16),
-                        decoration: BoxDecoration(
-                          color: AppColors.ulight,
-                          borderRadius: BorderRadius.circular(8),
-                          border: Border.all(width: 1, color: AppColors.border),
-                        ),
-                        child: Row(
-                          mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                          children: [
-                            Expanded(
-                              child: Text(
-                                _selectedAddress ?? "Определение адреса...",
-                                style: const TextStyle(
-                                  color: AppColors.gray,
-                                  fontSize: 16,
+                    items:
+                        _paymentOptions
+                            .map(
+                              (label) => DropdownMenuItem<String>(
+                                value: label,
+                                child: Text(
+                                  label,
+                                  style: const TextStyle(
+                                    color: AppColors.black,
+                                  ),
                                 ),
                               ),
-                            ),
-                            const Icon(
-                              Icons.map_outlined,
-                              color: AppColors.gray,
-                            ),
-                          ],
-                        ),
-                      ),
-                    ),
-                  ],
-                ),
-              const SizedBox(height: 32),
-
-              // Описание
-              const Text(
-                "Описание",
-                style: TextStyle(
-                  color: AppColors.gray,
-                  fontSize: 14,
-                  fontWeight: FontWeight.w500,
-                ),
-              ),
-              const SizedBox(height: 8),
-              Container(
-                decoration: BoxDecoration(
-                  border: Border.all(width: 1, color: AppColors.border),
-                  borderRadius: BorderRadius.circular(8),
-                  color: AppColors.bg,
-                ),
-                child: TextField(
-                  controller: _descriptionController,
-                  maxLines: null,
-                  maxLength: 300,
-                  keyboardType: TextInputType.multiline,
-                  decoration: const InputDecoration(
-                    hintText:
-                        "Опишите ваше задание максимально подробно и понятно...",
-                    hintStyle: TextStyle(color: AppColors.gray),
-                    border: OutlineInputBorder(),
-                    counterText: '',
+                            )
+                            .toList(),
+                    onChanged: (value) {
+                      if (value != null && mounted) {
+                        setState(() => _paymentFor = value);
+                      }
+                    },
                   ),
                 ),
-              ),
-              const SizedBox(height: 16),
+                const SizedBox(height: 16),
 
-              // Кнопка “Далее”
-              Btn(
-                text: _isLoading ? "Загрузка..." : "Создать задание",
-                onPressed: _isLoading ? null : _onNextPressed,
-                theme: 'violet',
-              ),
-            ],
+                //
+                Inputs(
+                  controller: _priceController,
+                  backgroundColor: AppColors.ulight,
+                  textColor: AppColors.gray,
+                  label: 'Стоимость',
+                  fieldType: 'number',
+                  maxLength: 9,
+                  required: true,
+                ),
+                const SizedBox(height: 16),
+
+                // Срок выполнения (дата + время)
+                const Text(
+                  "Срок выполнения",
+                  style: TextStyle(
+                    color: AppColors.gray,
+                    fontSize: 14,
+                    fontWeight: FontWeight.w500,
+                  ),
+                ),
+                const SizedBox(height: 8),
+                Container(
+                  decoration: BoxDecoration(
+                    border: Border.all(color: AppColors.border, width: 1),
+                    borderRadius: BorderRadius.circular(8),
+                  ),
+                  child: GestureDetector(
+                    onTap: _pickDeadline,
+                    child: Container(
+                      padding: const EdgeInsets.all(16),
+                      decoration: BoxDecoration(
+                        color: AppColors.ulight,
+                        borderRadius: BorderRadius.circular(8),
+                      ),
+                      child: Row(
+                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                        children: [
+                          Text(
+                            _deadline == null
+                                ? "Выбрать дату и время"
+                                : "${_deadline!.day.toString().padLeft(2, '0')}."
+                                    "${_deadline!.month.toString().padLeft(2, '0')}."
+                                    "${_deadline!.year} "
+                                    "${_deadline!.hour.toString().padLeft(2, '0')}:"
+                                    "${_deadline!.minute.toString().padLeft(2, '0')}",
+                            style: const TextStyle(
+                              color: AppColors.gray,
+                              fontSize: 16,
+                            ),
+                          ),
+                          const Icon(Icons.schedule, color: AppColors.gray),
+                        ],
+                      ),
+                    ),
+                  ),
+                ),
+
+                const SizedBox(height: 16),
+
+                const Text(
+                  "Способ указания адреса",
+                  style: TextStyle(
+                    fontSize: 14,
+                    fontWeight: FontWeight.w500,
+                    color: AppColors.gray,
+                  ),
+                ),
+                const SizedBox(height: 8),
+                Container(
+                  padding: const EdgeInsets.all(2),
+                  decoration: BoxDecoration(
+                    color: AppColors.ulight,
+                    borderRadius: BorderRadius.circular(30),
+                    border: Border.all(width: 1, color: AppColors.border),
+                  ),
+                  child: Row(
+                    children: [
+                      Expanded(
+                        child: GestureDetector(
+                          onTap: () => _updateAddressMode('auto'),
+                          child: _addressModeChip(
+                            active: !_isManualAddress,
+                            label: 'Автоопределение',
+                          ),
+                        ),
+                      ),
+                      Expanded(
+                        child: GestureDetector(
+                          onTap: () => _updateAddressMode('manual'),
+                          child: _addressModeChip(
+                            active: _isManualAddress,
+                            label: 'Ввести вручную',
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+                const SizedBox(height: 16),
+
+                if (_isManualAddress)
+                  // Ручной ввод адреса
+                  Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Inputs(
+                        controller: _manualAddressController,
+                        backgroundColor: AppColors.ulight,
+                        textColor: AppColors.gray,
+                        label: 'Адрес',
+                      ),
+                    ],
+                  )
+                else
+                  // Автоопределение + карта
+                  Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      const Text(
+                        "Локация",
+                        style: TextStyle(
+                          color: AppColors.gray,
+                          fontSize: 14,
+                          fontWeight: FontWeight.w500,
+                        ),
+                      ),
+                      const SizedBox(height: 8),
+                      GestureDetector(
+                        onTap: _openLocationPicker,
+                        child: Container(
+                          padding: const EdgeInsets.all(16),
+                          decoration: BoxDecoration(
+                            color: AppColors.ulight,
+                            borderRadius: BorderRadius.circular(8),
+                            border: Border.all(
+                              width: 1,
+                              color: AppColors.border,
+                            ),
+                          ),
+                          child: Row(
+                            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                            children: [
+                              Expanded(
+                                child: Text(
+                                  _selectedAddress ?? "Определение адреса...",
+                                  style: const TextStyle(
+                                    color: AppColors.gray,
+                                    fontSize: 16,
+                                  ),
+                                ),
+                              ),
+                              const Icon(
+                                Icons.map_outlined,
+                                color: AppColors.gray,
+                              ),
+                            ],
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
+                const SizedBox(height: 32),
+
+                // Описание
+                const Text(
+                  "Описание",
+                  style: TextStyle(
+                    color: AppColors.gray,
+                    fontSize: 14,
+                    fontWeight: FontWeight.w500,
+                  ),
+                ),
+                const SizedBox(height: 8),
+                Container(
+                  decoration: BoxDecoration(
+                    border: Border.all(width: 1, color: AppColors.border),
+                    borderRadius: BorderRadius.circular(8),
+                    color: AppColors.bg,
+                  ),
+                  child: TextField(
+                    controller: _descriptionController,
+                    maxLines: null,
+                    maxLength: 300,
+                    keyboardType: TextInputType.multiline,
+                    decoration: const InputDecoration(
+                      hintText:
+                          "Опишите ваше задание максимально подробно и понятно...",
+                      hintStyle: TextStyle(color: AppColors.gray),
+                      border: OutlineInputBorder(),
+                      counterText: '',
+                    ),
+                  ),
+                ),
+                const SizedBox(height: 16),
+
+                // Кнопка “Далее”
+                Btn(
+                  text: _isLoading ? "Загрузка..." : "Создать задание",
+                  onPressed: _isLoading ? null : _onNextPressed,
+                  theme: 'violet',
+                ),
+              ],
+            ),
           ),
         ),
       ),
