@@ -6,7 +6,10 @@ import 'package:nerobot/components/list/profile_list.dart';
 import 'package:nerobot/components/ui/Btn.dart';
 import 'package:nerobot/components/ui/Divider.dart';
 import 'package:nerobot/constants/app_colors.dart';
+import 'package:nerobot/models/subscription.dart';
 import 'package:nerobot/router/app_router.gr.dart';
+import 'package:nerobot/utils/role_manager.dart';
+import 'package:nerobot/utils/subscription_utils.dart';
 
 @RoutePage()
 class ProfileScreen extends StatefulWidget {
@@ -22,6 +25,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
 
   bool? notifCandidate;
   bool? notifCityTask;
+  Subscription? activeSubscription;
 
   final String? uid = FirebaseAuth.instance.currentUser?.uid;
 
@@ -34,16 +38,38 @@ class _ProfileScreenState extends State<ProfileScreen> {
   Future<void> _loadUserData() async {
     if (uid == null) return;
 
-    final doc =
-        await FirebaseFirestore.instance.collection('users').doc(uid).get();
-    final data = doc.data();
+    try {
+      // Загружаем данные пользователя
+      final doc =
+          await FirebaseFirestore.instance.collection('users').doc(uid).get();
+      final data = doc.data();
 
-    setState(() {
-      role = data?['type'] ?? 'customer';
-      notifCandidate = data?['notificationPreferences']?['candidate'] ?? false;
-      notifCityTask = data?['notificationPreferences']?['cityTask'] ?? false;
-      isLoading = false;
-    });
+      // Загружаем активную подписку
+      final subscription = await SubscriptionUtils.getActiveSubscription(uid!);
+
+      // Локально сохраненная роль (на случай, если в БД нет типа)
+      final savedRole = await RoleManager.getRole();
+
+      print('DEBUG: Загружена подписка: ${subscription?.status}');
+      print('DEBUG: Подписка активна: ${subscription?.isActive}');
+
+      setState(() {
+        role =
+            (data?['type'] as String?) ??
+            savedRole ??
+            'worker'; // По умолчанию исполнитель
+        notifCandidate =
+            data?['notificationPreferences']?['candidate'] ?? false;
+        notifCityTask = data?['notificationPreferences']?['cityTask'] ?? false;
+        activeSubscription = subscription;
+        isLoading = false;
+      });
+    } catch (e) {
+      print('Ошибка при загрузке данных пользователя: $e');
+      setState(() {
+        isLoading = false;
+      });
+    }
   }
 
   // --------------------------- Обновление роли -----------------------------
@@ -54,13 +80,34 @@ class _ProfileScreenState extends State<ProfileScreen> {
       'type': newRole,
     });
 
+    // Сохраняем локально, чтобы роль не «пропадала» без сети
+    await RoleManager.saveRole(newRole);
     setState(() => role = newRole);
   }
 
   // --------------------------- Выход из аккаунта ---------------------------
   Future<void> _signOut() async {
+    // Очищаем сохраненную роль при выходе
+    await RoleManager.clearRole();
     await FirebaseAuth.instance.signOut();
     if (mounted) AutoRouter.of(context).replace(const WelcomeRoute());
+  }
+
+  Future<void> _refreshData() async {
+    setState(() {
+      isLoading = true;
+    });
+    await _loadUserData();
+  }
+
+  Future<void> _forceRefreshData() async {
+    setState(() {
+      isLoading = true;
+    });
+
+    // Принудительно очищаем кэш и загружаем данные заново
+    await Future.delayed(const Duration(milliseconds: 1000));
+    await _loadUserData();
   }
 
   String get notificationSubtitle {
@@ -68,6 +115,19 @@ class _ProfileScreenState extends State<ProfileScreen> {
       return 'Включены';
     }
     return 'Выключены';
+  }
+
+  String get subscriptionSubtitle {
+    if (activeSubscription == null) {
+      return 'Нет активной подписки';
+    }
+    if (activeSubscription!.status == 'cancelled') {
+      return 'Подписка отменена';
+    }
+    if (!activeSubscription!.isActive) {
+      return 'Подписка истекла';
+    }
+    return 'Истечёт через: ${activeSubscription!.remainingTimeText}';
   }
 
   // -------------------------------------------------------------------------
@@ -86,6 +146,13 @@ class _ProfileScreenState extends State<ProfileScreen> {
         centerTitle: true,
         backgroundColor: Colors.white,
         elevation: 0,
+        actions: [
+          IconButton(
+            icon: const Icon(Icons.refresh),
+            onPressed: _loadUserData,
+            tooltip: 'Обновить',
+          ),
+        ],
       ),
 
       body: Column(
@@ -142,7 +209,6 @@ class _ProfileScreenState extends State<ProfileScreen> {
                 ),
                 ProfileOption(
                   title: 'Рейтинг и отзывы',
-                  subtitle: 'Супер (Топ-10)',
                   onTap: () => AutoRouter.of(context).push(ProfileStarsRoute()),
                 ),
                 ProfileOption(
@@ -159,11 +225,14 @@ class _ProfileScreenState extends State<ProfileScreen> {
                 ),
                 ProfileOption(
                   title: 'Подписка',
-                  subtitle: 'Истечёт через: 3 мес',
-                  onTap:
-                      () => AutoRouter.of(
-                        context,
-                      ).push(ProfileSubscriptionRoute()),
+                  subtitle: subscriptionSubtitle,
+                  onTap: () async {
+                    final result = await AutoRouter.of(
+                      context,
+                    ).push(ProfileSubscriptionRoute());
+                    // Всегда обновляем данные при возврате из экрана подписки
+                    _loadUserData();
+                  },
                 ),
                 ProfileOption(
                   title: 'О приложении',
@@ -186,6 +255,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
             theme: 'white',
             textColor: AppColors.red,
           ),
+
           const Square(height: 30),
         ],
       ),

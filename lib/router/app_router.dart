@@ -54,6 +54,11 @@ class AppRouter extends RootStackRouter {
       guards: [_authGuard],
     ),
     AutoRoute(
+      page: TaskExecutorsRoute.page,
+      path: '/task/executors/:taskId',
+      guards: [_authGuard],
+    ),
+    AutoRoute(
       page: ChatsRoute.page,
       path: '/task/chats/:chatsId',
       guards: [_authGuard],

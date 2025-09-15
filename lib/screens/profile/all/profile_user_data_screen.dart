@@ -83,6 +83,7 @@ class _ProfileUserDataScreenState extends State<ProfileUserDataScreen> {
     final firstName = userData?['firstName'] ?? '';
     final lastName = userData?['lastName'] ?? '';
     final phone = userData?['phone'] ?? '';
+    final city = userData?['city'] ?? 'Не указан';
     final about =
         userData?['about'] ??
         'Для современного мира разбавленное изрядной долей эмпатии, рациональное мышление создаёт предпосылки для кластеризации усилий.';
@@ -123,6 +124,7 @@ class _ProfileUserDataScreenState extends State<ProfileUserDataScreen> {
             ),
             const SizedBox(height: 8),
             InfoRow(label: 'Телефон', value: phone, hasBottomBorder: true),
+            InfoRow(label: 'Город', value: city, hasBottomBorder: true),
             SizedBox(
               width: double.infinity,
               child: InfoRow(
@@ -153,15 +155,6 @@ class _ProfileUserDataScreenState extends State<ProfileUserDataScreen> {
                         _loadUserData();
                       },
                       theme: 'violet',
-                    ),
-                  ),
-                  const Square(),
-                  SizedBox(
-                    width: double.infinity,
-                    child: Btn(
-                      text: 'Привязать соцсети',
-                      onPressed: () {},
-                      theme: 'white',
                     ),
                   ),
                 ],

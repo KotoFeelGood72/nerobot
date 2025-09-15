@@ -77,22 +77,41 @@ class TaskResponseScreen extends StatelessWidget {
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
-        title: Text('Отклики $taskId', style: TextStyle(color: Colors.black)),
+        title: Text('Отклики', style: TextStyle(color: Colors.black)),
         backgroundColor: Colors.white,
         centerTitle: true,
         elevation: 0,
         iconTheme: const IconThemeData(color: Colors.black),
+        leading: IconButton(
+          icon: const Icon(Icons.arrow_back, color: Colors.black),
+          onPressed: () {
+            // Возвращаемся на экран заданий
+            AutoRouter.of(context).replace(const TaskRoute());
+          },
+        ),
         actions: [
           GestureDetector(
             onTap: () {
               // При нажатии на иконку "i" переходим к деталям задачи (экран клиента)
               AutoRouter.of(
                 context,
-              ).push(TaskDetailCustomerRoute(taskId: taskId));
+              ).replace(TaskDetailCustomerRoute(taskId: taskId));
+            },
+            child: Container(
+              padding: const EdgeInsets.only(right: 8),
+              child: const Icon(Icons.info_outline_rounded, size: 28),
+            ),
+          ),
+          GestureDetector(
+            onTap: () {
+              // При нажатии на иконку исполнителей переходим к списку исполнителей
+              AutoRouter.of(
+                context,
+              ).replace(TaskExecutorsRoute(taskId: taskId));
             },
             child: Container(
               padding: const EdgeInsets.only(right: 16),
-              child: const Icon(Icons.info_outline_rounded, size: 28),
+              child: const Icon(Icons.people_outline, size: 28),
             ),
           ),
         ],

@@ -18,6 +18,7 @@ class Inputs extends StatelessWidget {
   final int? maxLength;
   final bool isMultiline;
   final ValueChanged<String>? onChanged;
+  final double? fontSize;
 
   const Inputs({
     super.key,
@@ -35,6 +36,7 @@ class Inputs extends StatelessWidget {
     this.maxLength,
     this.isMultiline = false,
     this.onChanged, // Добавляем onChanged
+    this.fontSize,
   });
 
   @override
@@ -79,7 +81,7 @@ class Inputs extends StatelessWidget {
                   label!,
                   style: TextStyle(
                     color: appliedTextColor,
-                    fontSize: 14,
+                    fontSize: fontSize ?? 14,
                     fontWeight: FontWeight.w500,
                   ),
                 ),
@@ -126,7 +128,10 @@ class Inputs extends StatelessWidget {
                           : TextInputType.text,
                   maxLines:
                       isMultiline ? 3 : 1, // Поддержка многострочного ввода
-                  style: TextStyle(color: appliedTextColor),
+                  style: TextStyle(
+                    color: appliedTextColor,
+                    fontSize: fontSize ?? 14,
+                  ),
                   inputFormatters: inputFormatters, // Применяем ограничители
                   decoration: InputDecoration(
                     hintText:
@@ -137,6 +142,7 @@ class Inputs extends StatelessWidget {
                             : 'Введите текст',
                     hintStyle: TextStyle(
                       color: appliedTextColor.withOpacity(0.6),
+                      fontSize: fontSize ?? 14,
                     ),
                     border: InputBorder.none,
                   ),

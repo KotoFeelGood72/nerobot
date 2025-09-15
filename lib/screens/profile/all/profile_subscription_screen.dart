@@ -1,10 +1,16 @@
 import 'package:auto_route/auto_route.dart';
+import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
 
 import 'package:nerobot/components/ui/Btn.dart';
 import 'package:nerobot/constants/app_colors.dart';
+import 'package:nerobot/models/payment.dart';
+import 'package:nerobot/models/subscription.dart';
 import 'package:nerobot/router/app_router.gr.dart';
 import 'package:nerobot/utils/modal_utils.dart';
+
+import 'package:nerobot/utils/subscription_utils.dart';
 
 @RoutePage()
 class ProfileSubscriptionScreen extends StatefulWidget {
@@ -18,6 +24,8 @@ class ProfileSubscriptionScreen extends StatefulWidget {
 class _ProfileSubscriptionScreenState extends State<ProfileSubscriptionScreen> {
   int _selectedSubscriptionIndex = 0;
   int _selectedPaymentMethodIndex = 0;
+  Subscription? currentSubscription;
+  bool isLoading = true;
 
   final List<Map<String, dynamic>> staticPlans = const [
     {'period': 1, 'price': 299},
@@ -26,73 +34,137 @@ class _ProfileSubscriptionScreenState extends State<ProfileSubscriptionScreen> {
   ];
 
   @override
+  void initState() {
+    super.initState();
+    _loadCurrentSubscription();
+  }
+
+  Future<void> _loadCurrentSubscription() async {
+    try {
+      final user = FirebaseAuth.instance.currentUser;
+      if (user == null) return;
+
+      final subscription = await SubscriptionUtils.getActiveSubscription(
+        user.uid,
+      );
+
+      if (mounted) {
+        setState(() {
+          currentSubscription = subscription;
+          isLoading = false;
+        });
+      }
+    } catch (e) {
+      print('Ошибка при загрузке подписки: $e');
+      if (mounted) {
+        setState(() {
+          isLoading = false;
+        });
+      }
+    }
+  }
+
+  String _getSubscriptionStatusText() {
+    if (currentSubscription == null) {
+      return 'Нет активной подписки';
+    }
+    if (currentSubscription!.status == 'cancelled') {
+      return 'Подписка отменена';
+    }
+    if (!currentSubscription!.isActive) {
+      return 'Подписка истекла';
+    }
+    return currentSubscription!.remainingTimeText;
+  }
+
+  @override
   Widget build(BuildContext context) {
+    if (isLoading) {
+      return const Scaffold(body: Center(child: CircularProgressIndicator()));
+    }
+
     return Scaffold(
-      appBar: AppBar(title: const Text('Подписка')),
-      body: Padding(
-        padding: const EdgeInsets.all(16.0),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.stretch,
-          children: [
-            _buildInfoRow('Истечёт через', '3 месяца'),
-            const SizedBox(height: 16),
-            Btn(
-              theme: 'white',
-              text: 'История платежей',
-              onPressed:
-                  () => AutoRouter.of(context).push(ProfileHistoryPriceRoute()),
-            ),
-            const SizedBox(height: 24),
-            const Text(
-              'Выберите подписку',
-              style: TextStyle(fontWeight: FontWeight.bold),
-            ),
-            const SizedBox(height: 16),
-            Row(
-              mainAxisAlignment: MainAxisAlignment.spaceEvenly,
-              children:
-                  staticPlans.asMap().entries.map((entry) {
-                    final index = entry.key;
-                    final plan = entry.value;
-                    return Flexible(
-                      child: _buildSubscriptionOption(
-                        index,
-                        plan['period'].toString(),
-                        '${plan['period']} ${_getPeriodText(plan['period'])}',
-                        '${plan['price']} ₽',
-                      ),
-                    );
-                  }).toList(),
-            ),
-            const SizedBox(height: 24),
-            const Text(
-              'Выберите способ оплаты',
-              style: TextStyle(fontWeight: FontWeight.bold),
-            ),
-            const SizedBox(height: 8),
-            _buildPaymentMethodOption(0, 'МИР/Visa/Mastercard'),
-            Divider(height: .5, color: AppColors.light.withOpacity(0.4)),
-            _buildPaymentMethodOption(1, 'СБП'),
-            const SizedBox(height: 24),
-            Btn(
-              text: 'Оплатить',
-              theme: 'violet',
-              onPressed: () {
-                final plan = staticPlans[_selectedSubscriptionIndex];
-                print(
-                  'Оплатить подписку: ${plan['period']} мес. за ${plan['price']} ₽ через метод $_selectedPaymentMethodIndex',
-                );
-              },
-            ),
-            const SizedBox(height: 16),
-            TextButton(
-              onPressed: () => _showCancelSubscriptionBottomSheet(context),
-              child: const Text(
-                'Отменить подписку',
-                style: TextStyle(color: Colors.red),
+      appBar: AppBar(
+        title: const Text('Подписка'),
+        actions: [
+          IconButton(
+            icon: const Icon(Icons.refresh),
+            onPressed: _loadCurrentSubscription,
+            tooltip: 'Обновить',
+          ),
+        ],
+      ),
+      body: SingleChildScrollView(
+        child: Padding(
+          padding: const EdgeInsets.all(16.0),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              _buildInfoRow('Истечёт через', _getSubscriptionStatusText()),
+              const SizedBox(height: 16),
+              Btn(
+                theme: 'white',
+                text: 'История платежей',
+                onPressed:
+                    () =>
+                        AutoRouter.of(context).push(ProfileHistoryPriceRoute()),
               ),
-            ),
-          ],
+              const SizedBox(height: 24),
+              const Text(
+                'Выберите подписку',
+                style: TextStyle(fontWeight: FontWeight.bold),
+              ),
+              const SizedBox(height: 16),
+              Row(
+                mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+                children:
+                    staticPlans.asMap().entries.map((entry) {
+                      final index = entry.key;
+                      final plan = entry.value;
+                      return Flexible(
+                        child: _buildSubscriptionOption(
+                          index,
+                          plan['period'].toString(),
+                          '${plan['period']} ${_getPeriodText(plan['period'])}',
+                          '${plan['price']} ₽',
+                        ),
+                      );
+                    }).toList(),
+              ),
+              const SizedBox(height: 24),
+              const Text(
+                'Выберите способ оплаты',
+                style: TextStyle(fontWeight: FontWeight.bold),
+              ),
+              const SizedBox(height: 8),
+              _buildPaymentMethodOption(0, 'МИР/Visa/Mastercard'),
+              Divider(height: .5, color: AppColors.light.withOpacity(0.4)),
+              _buildPaymentMethodOption(1, 'СБП'),
+              const SizedBox(height: 24),
+              Btn(
+                text: 'Оплатить',
+                theme: 'violet',
+                onPressed: _processPayment,
+              ),
+              const SizedBox(height: 16),
+              TextButton(
+                onPressed: () => _showCancelSubscriptionBottomSheet(context),
+                child: const Text(
+                  'Отменить подписку',
+                  style: TextStyle(color: Colors.red),
+                ),
+              ),
+              const SizedBox(height: 16),
+
+              TextButton(
+                onPressed: _loadCurrentSubscription,
+                child: const Text(
+                  'Обновить данные',
+                  style: TextStyle(color: Colors.orange),
+                ),
+              ),
+            ],
+          ),
         ),
       ),
     );
@@ -208,12 +280,12 @@ class _ProfileSubscriptionScreenState extends State<ProfileSubscriptionScreen> {
             mainAxisSize: MainAxisSize.min,
             children: [
               const Text(
-                'Приостановить подписку?',
+                'Отменить подписку?',
                 style: TextStyle(fontWeight: FontWeight.bold, fontSize: 24),
               ),
               const SizedBox(height: 8),
               const Text(
-                'Подписку можно возобновить в любое время, чтобы вы смогли продолжить пользоваться всеми функциями приложения',
+                'После отмены подписка будет деактивирована. Вы сможете оформить новую подписку в любое время.',
                 textAlign: TextAlign.center,
                 style: TextStyle(color: Colors.grey),
               ),
@@ -225,15 +297,13 @@ class _ProfileSubscriptionScreenState extends State<ProfileSubscriptionScreen> {
               ),
               const SizedBox(height: 8),
               Btn(
-                text: 'Да, приостановить',
-                theme: 'white',
-                onPressed: () => Navigator.of(context).pop(),
-              ),
-              Btn(
-                text: 'Нет, всё равно отменить',
+                text: 'Да, отменить подписку',
                 theme: 'white',
                 textColor: AppColors.red,
-                onPressed: () => Navigator.of(context).pop(),
+                onPressed: () async {
+                  Navigator.of(context).pop();
+                  await _cancelSubscription();
+                },
               ),
             ],
           ),
@@ -252,6 +322,152 @@ class _ProfileSubscriptionScreenState extends State<ProfileSubscriptionScreen> {
         return 'месяцев';
       default:
         return '';
+    }
+  }
+
+  String _getPaymentMethodText(int index) {
+    switch (index) {
+      case 0:
+        return 'card';
+      case 1:
+        return 'sbp';
+      default:
+        return 'other';
+    }
+  }
+
+  String _getSubscriptionTypeText(int period) {
+    switch (period) {
+      case 1:
+        return 'monthly';
+      case 3:
+        return 'quarterly';
+      case 12:
+        return 'yearly';
+      default:
+        return 'custom';
+    }
+  }
+
+  Future<void> _processPayment() async {
+    try {
+      final user = FirebaseAuth.instance.currentUser;
+      if (user == null) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Пользователь не авторизован')),
+        );
+        return;
+      }
+
+      final plan = staticPlans[_selectedSubscriptionIndex];
+      final amount = plan['price'].toDouble();
+      final period = plan['period'] as int;
+      final paymentMethod = _getPaymentMethodText(_selectedPaymentMethodIndex);
+      final subscriptionType = _getSubscriptionTypeText(period);
+
+      // Создаем платеж в Firestore
+      final payment = Payment(
+        id: '', // будет установлен Firestore
+        userId: user.uid,
+        amount: amount,
+        status: 'pending',
+        paymentMethod: paymentMethod,
+        description: 'Подписка на ${period} ${_getPeriodText(period)}',
+        createdAt: DateTime.now(),
+        subscriptionType: subscriptionType,
+        subscriptionPeriod: period,
+        transactionId: 'TXN_${DateTime.now().millisecondsSinceEpoch}',
+      );
+
+      // Сохраняем платеж в Firestore
+      final paymentDocRef = await FirebaseFirestore.instance
+          .collection('payments')
+          .add(payment.toFirestore());
+
+      // Создаем подписку
+      final now = DateTime.now();
+      final endDate = now.add(Duration(days: period * 30)); // примерный расчет
+
+      final subscription = Subscription(
+        id: '',
+        userId: user.uid,
+        type: subscriptionType,
+        period: period,
+        startDate: now,
+        endDate: endDate,
+        status: 'active',
+        amount: amount,
+        paymentId: paymentDocRef.id,
+      );
+
+      await SubscriptionUtils.createSubscription(subscription);
+
+      // Показываем успешное сообщение
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(
+            'Подписка на ${period} ${_getPeriodText(period)} активирована',
+          ),
+          backgroundColor: Colors.green,
+        ),
+      );
+
+      // Возвращаемся к профилю с обновленными данными
+      Navigator.of(context).pop(true);
+    } catch (e) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('Ошибка при создании платежа: $e'),
+          backgroundColor: Colors.red,
+        ),
+      );
+    }
+  }
+
+  Future<void> _cancelSubscription() async {
+    try {
+      if (currentSubscription == null) {
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(
+              content: Text('Нет активной подписки для отмены'),
+              backgroundColor: Colors.orange,
+            ),
+          );
+        }
+        return;
+      }
+
+      print('DEBUG: Отменяем подписку с ID: ${currentSubscription!.id}');
+
+      // Обновляем статус подписки на 'cancelled'
+      await SubscriptionUtils.updateSubscriptionStatus(
+        currentSubscription!.id,
+        'cancelled',
+      );
+
+      print('DEBUG: Статус подписки обновлен на cancelled');
+
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('Подписка успешно отменена'),
+            backgroundColor: Colors.green,
+          ),
+        );
+
+        // Возвращаемся к профилю с обновленными данными
+        Navigator.of(context).pop(true);
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Ошибка при отмене подписки: $e'),
+            backgroundColor: Colors.red,
+          ),
+        );
+      }
     }
   }
 }

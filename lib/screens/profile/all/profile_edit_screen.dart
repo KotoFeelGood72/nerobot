@@ -33,10 +33,174 @@ class _ProfileEditScreenState extends State<ProfileEditScreen> {
   final TextEditingController aboutMySelfController = TextEditingController();
 
   String? photoUrl;
+  String selectedCity = 'Москва'; // По умолчанию Москва
   bool isLoading = true; // первичная загрузка
   bool _inProcess = false; // лоадер на любые операции
 
   final String? userId = FirebaseAuth.instance.currentUser?.uid;
+
+  // Список городов для выбора
+  final List<String> cities = [
+    'Москва',
+    'Санкт-Петербург',
+    'Новосибирск',
+    'Екатеринбург',
+    'Казань',
+    'Нижний Новгород',
+    'Челябинск',
+    'Самара',
+    'Уфа',
+    'Ростов-на-Дону',
+    'Краснодар',
+    'Пермь',
+    'Воронеж',
+    'Волгоград',
+    'Красноярск',
+    'Саратов',
+    'Тюмень',
+    'Тольятти',
+    'Ижевск',
+    'Барнаул',
+    'Ульяновск',
+    'Иркутск',
+    'Хабаровск',
+    'Ярославль',
+    'Владивосток',
+    'Махачкала',
+    'Томск',
+    'Оренбург',
+    'Кемерово',
+    'Новокузнецк',
+    'Рязань',
+    'Астрахань',
+    'Набережные Челны',
+    'Пенза',
+    'Липецк',
+    'Киров',
+    'Чебоксары',
+    'Тула',
+    'Калининград',
+    'Курск',
+    'Улан-Удэ',
+    'Ставрополь',
+    'Сочи',
+    'Иваново',
+    'Брянск',
+    'Белгород',
+    'Архангельск',
+    'Владимир',
+    'Севастополь',
+    'Чита',
+    'Грозный',
+    'Калининград',
+    'Смоленск',
+    'Вологда',
+    'Курган',
+    'Орёл',
+    'Череповец',
+    'Владикавказ',
+    'Мурманск',
+    'Сургут',
+    'Волжский',
+    'Саранск',
+    'Стерлитамак',
+    'Грозный',
+    'Якутск',
+    'Кострома',
+    'Петрозаводск',
+    'Нижневартовск',
+    'Йошкар-Ола',
+    'Новороссийск',
+    'Сыктывкар',
+    'Нижнекамск',
+    'Шахты',
+    'Дзержинск',
+    'Орск',
+    'Энгельс',
+    'Бийск',
+    'Прокопьевск',
+    'Рыбинск',
+    'Балаково',
+    'Ухта',
+    'Королёв',
+    'Сызрань',
+    'Мытищи',
+    'Люберцы',
+    'Волгодонск',
+    'Новочеркасск',
+    'Абакан',
+    'Находка',
+    'Уссурийск',
+    'Березники',
+    'Салават',
+    'Электросталь',
+    'Миасс',
+    'Первоуральск',
+    'Рубцовск',
+    'Альметьевск',
+    'Ковров',
+    'Коломна',
+    'Майкоп',
+    'Пятигорск',
+    'Одинцово',
+    'Копейск',
+    'Хасавюрт',
+    'Новомосковск',
+    'Кисловодск',
+    'Серпухов',
+    'Первоуральск',
+    'Нефтеюганск',
+    'Новошахтинск',
+    'Щёлково',
+    'Дербент',
+    'Орехово-Зуево',
+    'Нефтекамск',
+    'Черкесск',
+    'Батайск',
+    'Раменское',
+    'Домодедово',
+    'Сергиев Посад',
+    'Армавир',
+    'Ухта',
+    'Ленинск-Кузнецкий',
+    'Междуреченск',
+    'Киселёвск',
+    'Анжеро-Судженск',
+    'Юрга',
+    'Белово',
+    'Прокопьевск',
+    'Осинники',
+    'Мыски',
+    'Мариинск',
+    'Таштагол',
+    'Топки',
+    'Полысаево',
+    'Гурьевск',
+    'Салаир',
+    'Тайга',
+    'Берёзовский',
+    'Калтан',
+    'Кемерово',
+    'Новокузнецк',
+    'Прокопьевск',
+    'Ленинск-Кузнецкий',
+    'Киселёвск',
+    'Междуреченск',
+    'Юрга',
+    'Белово',
+    'Анжеро-Судженск',
+    'Осинники',
+    'Мыски',
+    'Мариинск',
+    'Таштагол',
+    'Топки',
+    'Полысаево',
+    'Гурьевск',
+    'Салаир',
+    'Тайга',
+    'Берёзовский',
+    'Калтан',
+  ];
 
   /* ------------------------------------------------------------ */
   /*  INIT                                                        */
@@ -63,6 +227,7 @@ class _ProfileEditScreenState extends State<ProfileEditScreen> {
         lastNameController.text = data['lastName'] ?? '';
         phoneController.text = data['phone'] ?? '';
         aboutMySelfController.text = data['about'] ?? '';
+        selectedCity = data['city'] ?? 'Москва';
         photoUrl = data['image_url'];
         isLoading = false;
       });
@@ -79,6 +244,7 @@ class _ProfileEditScreenState extends State<ProfileEditScreen> {
         'firstName': firstNameController.text,
         'lastName': lastNameController.text,
         'phone': cleanedPhone,
+        'city': selectedCity,
         'about': aboutMySelfController.text,
         'image_url': photoUrl ?? '',
       });
@@ -197,6 +363,8 @@ class _ProfileEditScreenState extends State<ProfileEditScreen> {
                   fieldType: 'phone',
                 ),
                 const SizedBox(height: 16),
+                _buildCityDropdown(),
+                const SizedBox(height: 16),
                 Inputs(
                   controller: aboutMySelfController,
                   backgroundColor: AppColors.ulight,
@@ -236,5 +404,54 @@ class _ProfileEditScreenState extends State<ProfileEditScreen> {
       return NetworkImage(imageUrl);
     }
     return const AssetImage('assets/images/splash.png');
+  }
+
+  Widget _buildCityDropdown() {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Padding(
+          padding: const EdgeInsets.only(bottom: 4),
+          child: Text(
+            'Город',
+            style: TextStyle(
+              color: Colors.black,
+              fontSize: 14,
+              fontWeight: FontWeight.w500,
+            ),
+          ),
+        ),
+        Container(
+          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
+          decoration: BoxDecoration(
+            color: AppColors.ulight,
+            borderRadius: BorderRadius.circular(8),
+            border: Border.all(color: AppColors.border),
+          ),
+          child: DropdownButtonHideUnderline(
+            child: DropdownButton<String>(
+              value: selectedCity,
+              isExpanded: true,
+              icon: const Icon(Icons.arrow_drop_down, color: Colors.black),
+              style: const TextStyle(color: Colors.black, fontSize: 16),
+              items:
+                  cities.map<DropdownMenuItem<String>>((String city) {
+                    return DropdownMenuItem<String>(
+                      value: city,
+                      child: Text(city),
+                    );
+                  }).toList(),
+              onChanged: (String? newValue) {
+                if (newValue != null) {
+                  setState(() {
+                    selectedCity = newValue;
+                  });
+                }
+              },
+            ),
+          ),
+        ),
+      ],
+    );
   }
 }

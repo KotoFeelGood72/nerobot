@@ -15,6 +15,17 @@ Future<List<Map<String, dynamic>>> loadTasks({
   double? radiusKm,
   GeoPoint? userLocation,
 }) async {
+  print('=== ВЫЗОВ loadTasks ===');
+  print('role: $role');
+  print('currentFilter: $currentFilter');
+  print('minPrice: $minPrice');
+  print('maxPrice: $maxPrice');
+  print('radiusKm: $radiusKm');
+  print('userLocation: $userLocation');
+  if (userLocation != null) {
+    print('Координаты в loadTasks: ${userLocation.latitude}, ${userLocation.longitude}');
+  }
+  
   final uid = FirebaseAuth.instance.currentUser!.uid;
   late Query<Map<String, dynamic>> q;
 
@@ -54,6 +65,13 @@ Future<List<Map<String, dynamic>>> loadTasks({
 
   final snap = await q.get();
   var data = snap.docs.map((d) => {...d.data(), 'id': d.id}).toList();
+  
+  print('Получено задач из Firestore: ${data.length}');
+  print('Первые 3 задачи:');
+  for (int i = 0; i < data.length && i < 3; i++) {
+    final task = data[i];
+    print('  Задача ${task['id']}: lat=${task['lat']}, lng=${task['lng']}');
+  }
 
   if (role == 'worker' && currentFilter == 'tasks') {
     data =
@@ -64,18 +82,59 @@ Future<List<Map<String, dynamic>>> loadTasks({
   }
 
   if (userLocation != null && radiusKm != null) {
+    print('=== ФИЛЬТРАЦИЯ ПО РАССТОЯНИЮ ===');
+    print('Радиус: $radiusKm км');
+    print('Координаты пользователя: ${userLocation.latitude}, ${userLocation.longitude}');
+    
+    final beforeCount = data.length;
     data =
         data.where((t) {
-          final loc = t['location'];
-          if (loc is! GeoPoint) return false;
+          // Проверяем поля lat и lng (как в Firestore)
+          final lat = t['lat'];
+          final lng = t['lng'];
+
+          if (lat == null || lng == null) {
+            print('  Задача ${t['id']}: координаты отсутствуют (lat=$lat, lng=$lng)');
+            return false;
+          }
+
+          final taskLat =
+              (lat is int)
+                  ? lat.toDouble()
+                  : (lat is double)
+                  ? lat
+                  : 0.0;
+          final taskLng =
+              (lng is int)
+                  ? lng.toDouble()
+                  : (lng is double)
+                  ? lng
+                  : 0.0;
+
+          if (taskLat == 0.0 || taskLng == 0.0) {
+            print('  Задача ${t['id']}: неверные координаты (lat=$taskLat, lng=$taskLng)');
+            return false;
+          }
+
           final d = _distanceKm(
             userLocation.latitude,
             userLocation.longitude,
-            loc.latitude,
-            loc.longitude,
+            taskLat,
+            taskLng,
           );
-          return d <= radiusKm;
+
+          final isInRadius = d <= radiusKm;
+          print(
+            '  Задача ${t['id']}: расстояние ${d.toStringAsFixed(2)} км (радиус: $radiusKm км) - ${isInRadius ? "✅ В РАДИУСЕ" : "❌ ВНЕ РАДИУСА"}',
+          );
+          return isInRadius;
         }).toList();
+    
+    final afterCount = data.length;
+    print('Результат фильтрации: $beforeCount → $afterCount задач');
+    print('========================');
+  } else {
+    print('⚠️ Фильтрация по расстоянию пропущена: userLocation=${userLocation != null}, radiusKm=${radiusKm != null}');
   }
 
   if (minPrice != null || maxPrice != null) {

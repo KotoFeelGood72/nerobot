@@ -4,11 +4,17 @@ import 'package:latlong2/latlong.dart';
 import 'package:nerobot/components/ui/Btn.dart';
 import 'package:nerobot/components/ui/Inputs.dart';
 import 'package:nerobot/constants/app_colors.dart';
+import 'package:nerobot/utils/user_city_utils.dart';
 
 class TaskFilters extends StatefulWidget {
   final Function(Map<String, dynamic>) onApply;
+  final int activeFiltersCount;
 
-  const TaskFilters({super.key, required this.onApply});
+  const TaskFilters({
+    super.key,
+    required this.onApply,
+    this.activeFiltersCount = 0,
+  });
 
   @override
   State<TaskFilters> createState() => _TaskFiltersState();
@@ -34,6 +40,7 @@ class _TaskFiltersState extends State<TaskFilters> {
   @override
   void initState() {
     super.initState();
+    print('=== ИНИЦИАЛИЗАЦИЯ TaskFilters ===');
     _fetchUserLocation();
   }
 
@@ -44,15 +51,44 @@ class _TaskFiltersState extends State<TaskFilters> {
   }
 
   Future<void> _fetchUserLocation() async {
-    final permission = await Geolocator.checkPermission();
-    if (permission == LocationPermission.denied) {
-      await Geolocator.requestPermission();
-    }
+    print('=== ВЫЗОВ _fetchUserLocation ===');
+    // Получаем координаты выбранного города пользователя
+    final cityCoordinates = await UserCityUtils.getUserCityCoordinates();
 
-    final position = await Geolocator.getCurrentPosition();
-    setState(() {
-      _userLocation = LatLng(position.latitude, position.longitude);
-    });
+    if (mounted) {
+      setState(() {
+        if (cityCoordinates != null) {
+          _userLocation = cityCoordinates;
+          print(
+            'Установлены координаты города пользователя: ${cityCoordinates.latitude}, ${cityCoordinates.longitude}',
+          );
+        } else {
+          // Если город не найден, используем текущее местоположение как fallback
+          _getCurrentLocation();
+        }
+      });
+    }
+  }
+
+  Future<void> _getCurrentLocation() async {
+    try {
+      final permission = await Geolocator.checkPermission();
+      if (permission == LocationPermission.denied) {
+        await Geolocator.requestPermission();
+      }
+
+      final position = await Geolocator.getCurrentPosition();
+      if (mounted) {
+        setState(() {
+          _userLocation = LatLng(position.latitude, position.longitude);
+        });
+        print(
+          'Установлены координаты текущего местоположения: ${position.latitude}, ${position.longitude}',
+        );
+      }
+    } catch (e) {
+      print('Ошибка при получении текущего местоположения: $e');
+    }
   }
 
   void _applyFilters() {
@@ -65,23 +101,34 @@ class _TaskFiltersState extends State<TaskFilters> {
     };
 
     // Отладочная информация
-    print('Применяем фильтры:');
+    print('=== ПРИМЕНЯЕМ ФИЛЬТРЫ ===');
     print('minPrice: ${filters['minPrice']}');
     print('shiftType: ${filters['shiftType']}');
     print('radiusKm: ${filters['radiusKm']}');
     print('sortBy: ${filters['sortBy']}');
+    print('userLocation: ${filters['userLocation']}');
+    if (filters['userLocation'] != null) {
+      print(
+        'Координаты пользователя: ${filters['userLocation'].latitude}, ${filters['userLocation'].longitude}',
+      );
+    } else {
+      print('⚠️ ВНИМАНИЕ: userLocation равен null!');
+    }
+    print('========================');
 
     widget.onApply(filters);
     Navigator.pop(context); // Закрыть BottomSheet после применения
   }
 
   void _resetFilters() {
-    setState(() {
-      _minPriceController.clear();
-      _shiftType = null;
-      _radiusKm = 5;
-      _sortBy = null;
-    });
+    if (mounted) {
+      setState(() {
+        _minPriceController.clear();
+        _shiftType = null;
+        _radiusKm = 5;
+        _sortBy = null;
+      });
+    }
   }
 
   void _resetFiltersInModal(StateSetter setModalState) {
@@ -117,7 +164,7 @@ class _TaskFiltersState extends State<TaskFilters> {
                     const Text(
                       "Фильтры",
                       style: TextStyle(
-                        fontSize: 18,
+                        fontSize: 16,
                         fontWeight: FontWeight.bold,
                       ),
                     ),
@@ -131,6 +178,7 @@ class _TaskFiltersState extends State<TaskFilters> {
                       label: 'Мин. цена',
                       fieldType: 'number',
                       maxLength: 9,
+                      fontSize: 12,
                     ),
 
                     const SizedBox(height: 16),
@@ -143,9 +191,9 @@ class _TaskFiltersState extends State<TaskFilters> {
                             crossAxisAlignment: CrossAxisAlignment.start,
                             children: [
                               const Text(
-                                "Оплата за",
+                                "Тип оплаты",
                                 style: TextStyle(
-                                  fontSize: 14,
+                                  fontSize: 12,
                                   fontWeight: FontWeight.w500,
                                   color: AppColors.gray,
                                 ),
@@ -169,8 +217,11 @@ class _TaskFiltersState extends State<TaskFilters> {
                                     color: AppColors.gray,
                                   ),
                                   hint: const Text(
-                                    "Выберите тип оплаты",
-                                    style: TextStyle(color: AppColors.gray),
+                                    "Тип оплаты",
+                                    style: TextStyle(
+                                      color: AppColors.gray,
+                                      fontSize: 12,
+                                    ),
                                   ),
                                   items:
                                       _shiftOptions
@@ -181,6 +232,7 @@ class _TaskFiltersState extends State<TaskFilters> {
                                                 label,
                                                 style: const TextStyle(
                                                   color: AppColors.black,
+                                                  fontSize: 12,
                                                 ),
                                               ),
                                             ),
@@ -208,7 +260,7 @@ class _TaskFiltersState extends State<TaskFilters> {
                               const Text(
                                 "Сортировка",
                                 style: TextStyle(
-                                  fontSize: 14,
+                                  fontSize: 12,
                                   fontWeight: FontWeight.w500,
                                   color: AppColors.gray,
                                 ),
@@ -232,8 +284,11 @@ class _TaskFiltersState extends State<TaskFilters> {
                                     color: AppColors.gray,
                                   ),
                                   hint: const Text(
-                                    "Выберите сортировку",
-                                    style: TextStyle(color: AppColors.gray),
+                                    "Сортировка",
+                                    style: TextStyle(
+                                      color: AppColors.gray,
+                                      fontSize: 12,
+                                    ),
                                   ),
                                   items:
                                       _sortOptions
@@ -244,6 +299,7 @@ class _TaskFiltersState extends State<TaskFilters> {
                                                 label,
                                                 style: const TextStyle(
                                                   color: AppColors.black,
+                                                  fontSize: 12,
                                                 ),
                                               ),
                                             ),
@@ -322,7 +378,7 @@ class _TaskFiltersState extends State<TaskFilters> {
                         Expanded(
                           child: Btn(
                             text: 'Сбросить',
-                            theme: 'gray',
+                            theme: 'light',
                             onPressed:
                                 () => _resetFiltersInModal(setModalState),
                           ),
@@ -355,7 +411,30 @@ class _TaskFiltersState extends State<TaskFilters> {
       child: TextButton.icon(
         onPressed: _openFilterSheet,
         icon: const Icon(Icons.filter_list),
-        label: const Text("Фильтры"),
+        label: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            const Text("Фильтры"),
+            if (widget.activeFiltersCount > 0) ...[
+              const SizedBox(width: 4),
+              Container(
+                padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                decoration: BoxDecoration(
+                  color: AppColors.violet,
+                  borderRadius: BorderRadius.circular(10),
+                ),
+                child: Text(
+                  widget.activeFiltersCount.toString(),
+                  style: const TextStyle(
+                    color: Colors.white,
+                    fontSize: 10,
+                    fontWeight: FontWeight.bold,
+                  ),
+                ),
+              ),
+            ],
+          ],
+        ),
         style: TextButton.styleFrom(foregroundColor: AppColors.violet),
       ),
     );

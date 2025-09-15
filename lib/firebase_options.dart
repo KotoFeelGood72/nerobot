@@ -51,11 +51,11 @@ class DefaultFirebaseOptions {
   );
 
   static const FirebaseOptions android = FirebaseOptions(
-    apiKey: 'AIzaSyDRtbGcw9SnBB965SA2_zrbGCovBMc76m4',
-    appId: '1:432041123207:android:1d66cf7c7cf9d27e6c4722',
-    messagingSenderId: '432041123207',
-    projectId: 'nerobot-40a73',
-    storageBucket: 'nerobot-40a73.appspot.com',
+    apiKey: 'AIzaSyAKezJnWvIKTFgmfnJ3WiE1X3i9mPhqJDI',
+    appId: '1:408622761678:android:8ef469e8e25b6f9319f29f',
+    messagingSenderId: '408622761678',
+    projectId: 'handy-35312',
+    storageBucket: 'handy-35312.firebasestorage.app',
   );
 
   static const FirebaseOptions ios = FirebaseOptions(
@@ -64,7 +64,8 @@ class DefaultFirebaseOptions {
     messagingSenderId: '432041123207',
     projectId: 'nerobot-40a73',
     storageBucket: 'nerobot-40a73.appspot.com',
-    androidClientId: '432041123207-75lpc56ooa08b1to53kg2cs15dp44sii.apps.googleusercontent.com',
+    androidClientId:
+        '432041123207-75lpc56ooa08b1to53kg2cs15dp44sii.apps.googleusercontent.com',
     iosBundleId: 'com.nerobot.app.nerobot',
   );
 
@@ -74,7 +75,8 @@ class DefaultFirebaseOptions {
     messagingSenderId: '432041123207',
     projectId: 'nerobot-40a73',
     storageBucket: 'nerobot-40a73.appspot.com',
-    androidClientId: '432041123207-75lpc56ooa08b1to53kg2cs15dp44sii.apps.googleusercontent.com',
+    androidClientId:
+        '432041123207-75lpc56ooa08b1to53kg2cs15dp44sii.apps.googleusercontent.com',
     iosBundleId: 'com.nerobot.app.nerobot',
   );
 

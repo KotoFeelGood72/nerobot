@@ -1,4 +1,4 @@
-package com.nerobot.app.nerobot
+package com.handywork.app
 
 import io.flutter.embedding.android.FlutterActivity
 

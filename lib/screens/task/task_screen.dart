@@ -7,9 +7,11 @@ import 'package:flutter/material.dart';
 import 'package:nerobot/components/bar/bottom_nav_bar.dart';
 import 'package:nerobot/components/list/task_list.dart';
 import 'package:nerobot/components/ui/task_filters.dart';
+import 'package:nerobot/components/placeholder/task_empty.dart';
 import 'package:nerobot/constants/app_colors.dart';
 import 'package:nerobot/router/app_router.gr.dart';
 import 'package:nerobot/utils/task_loader.dart';
+import 'package:nerobot/utils/subscription_utils.dart';
 
 @RoutePage()
 class TaskScreen extends StatefulWidget {
@@ -36,6 +38,17 @@ class _TaskScreenState extends State<TaskScreen> {
   // Новый флаг: показывать ли поле поиска в AppBar
   bool _isSearching = false;
 
+  // Для фильтров:
+  Map<String, dynamic> _activeFilters = {};
+
+  // Для последних заданий:
+  List<Map<String, dynamic>> _recentTasks = [];
+  bool _isLoadingRecent = false;
+
+  // Для проверки подписки:
+  bool _hasActiveSubscription = false;
+  bool _isLoadingSubscription = true;
+
   // ---------- utils ----------
   List<String> get _filters =>
       role == 'worker' ? ['tasks', 'open', 'history'] : ['tasks', 'history'];
@@ -52,6 +65,81 @@ class _TaskScreenState extends State<TaskScreen> {
       return title.contains(lower) || description.contains(lower);
     }).toList();
   }
+
+  /// Подсчитывает количество активных фильтров
+  int get _activeFiltersCount {
+    int count = 0;
+    if (_activeFilters['minPrice'] != null) count++;
+    if (_activeFilters['shiftType'] != null) count++;
+    if (_activeFilters['sortBy'] != null) count++;
+    if (_activeFilters['radiusKm'] != null && _activeFilters['radiusKm'] != 5.0)
+      count++;
+    return count;
+  }
+
+  /// Проверяет, есть ли активные фильтры
+  bool get _hasActiveFilters => _activeFiltersCount > 0;
+
+  /// Проверяет активную подписку пользователя
+  Future<void> _checkSubscription() async {
+    try {
+      final uid = FirebaseAuth.instance.currentUser?.uid;
+      if (uid == null) return;
+
+      final hasSubscription = await SubscriptionUtils.hasActiveSubscription(
+        uid,
+      );
+      if (mounted) {
+        setState(() {
+          _hasActiveSubscription = hasSubscription;
+          _isLoadingSubscription = false;
+        });
+      }
+    } catch (e) {
+      print('Ошибка при проверке подписки: $e');
+      if (mounted) {
+        setState(() {
+          _isLoadingSubscription = false;
+        });
+      }
+    }
+  }
+
+  /// Загружает последние созданные задания
+  Future<void> _loadRecentTasks() async {
+    if (_isLoadingRecent) return;
+
+    setState(() {
+      _isLoadingRecent = true;
+    });
+
+    try {
+      final query = FirebaseFirestore.instance
+          .collection('orders')
+          .where('status', isEqualTo: 'open')
+          .where('active', isEqualTo: true)
+          .where('deleted', isEqualTo: false)
+          .orderBy('created_date', descending: true)
+          .limit(5);
+
+      final snapshot = await query.get();
+      final recentTasks =
+          snapshot.docs.map((doc) {
+            return {...doc.data(), 'id': doc.id};
+          }).toList();
+
+      setState(() {
+        _recentTasks = recentTasks;
+      });
+    } catch (e) {
+      print('Ошибка при загрузке последних заданий: $e');
+    } finally {
+      setState(() {
+        _isLoadingRecent = false;
+      });
+    }
+  }
+
   // ---------------------------
 
   @override
@@ -65,6 +153,10 @@ class _TaskScreenState extends State<TaskScreen> {
         searchQuery = _searchController.text.trim();
       });
     });
+
+    // Проверяем подписку и загружаем последние задания
+    _checkSubscription();
+    _loadRecentTasks();
   }
 
   @override
@@ -118,7 +210,7 @@ class _TaskScreenState extends State<TaskScreen> {
         .doc(uid)
         .snapshots()
         .listen((snap) async {
-          final newRole = snap.data()?['type'] ?? 'customer';
+          final newRole = snap.data()?['type'] ?? 'worker';
           if (newRole != role) {
             // роль поменялась → обновляем стейт и заново грузим список
             setState(() {
@@ -129,6 +221,7 @@ class _TaskScreenState extends State<TaskScreen> {
               _searchController.clear();
             });
             await _loadTasks(); // подтягиваем задачи под новую роль
+            _checkSubscription(); // проверяем подписку для новой роли
           }
         });
   }
@@ -142,25 +235,49 @@ class _TaskScreenState extends State<TaskScreen> {
     double? radiusKm,
     GeoPoint? userLocation,
   }) async {
+    print('=== ВЫЗОВ _loadTasks ===');
+    print('minPrice: $minPrice');
+    print('maxPrice: $maxPrice');
+    print('radiusKm: $radiusKm');
+    print('userLocation: $userLocation');
+    if (userLocation != null) {
+      print(
+        'Координаты в _loadTasks: ${userLocation.latitude}, ${userLocation.longitude}',
+      );
+    }
+
     try {
       setState(() {
         isLoading = true;
         error = null;
       });
 
+      // Если параметры не переданы, используем сохраненные фильтры
+      final effectiveMinPrice = minPrice ?? _activeFilters['minPrice'];
+      final effectiveRadiusKm = radiusKm ?? _activeFilters['radiusKm'];
+      final effectiveUserLocation =
+          userLocation ?? _activeFilters['userLocation'];
+
       final data = await loadTasks(
         role: role!,
         currentFilter: _currentFilter,
         startDate: startDate,
         endDate: endDate,
-        minPrice: minPrice,
+        minPrice: effectiveMinPrice,
         maxPrice: maxPrice,
-        radiusKm: radiusKm,
-        userLocation: userLocation,
+        radiusKm: effectiveRadiusKm,
+        userLocation: effectiveUserLocation,
       );
 
+      print('Получено задач: ${data.length}');
       setState(() => tasks = data);
+
+      // Обновляем последние задания если мы на вкладке "Новые"
+      if (role == 'worker' && tabIndex == 0) {
+        _loadRecentTasks();
+      }
     } catch (e) {
+      print('Ошибка в _loadTasks: $e');
       setState(() => error = e);
     } finally {
       if (mounted) setState(() => isLoading = false);
@@ -266,31 +383,59 @@ class _TaskScreenState extends State<TaskScreen> {
           padding: const EdgeInsets.all(16),
           child: Column(
             children: [
-              TaskFilters(
-                onApply: (params) async {
-                  print('Получены параметры фильтров: $params');
-                  await _loadTasks(
-                    minPrice: params['minPrice'],
-                    radiusKm: params['radiusKm'],
-                    userLocation:
-                        params['userLocation'] != null
-                            ? GeoPoint(
-                              params['userLocation'].latitude,
-                              params['userLocation'].longitude,
-                            )
-                            : null,
-                  );
-                },
-              ),
+              // Показываем заглушку для исполнителей без подписки
+              if (role == 'worker' &&
+                  !_isLoadingSubscription &&
+                  !_hasActiveSubscription)
+                Expanded(child: TaskEmpty())
+              else ...[
+                // Показываем последние задания только на вкладке "Новые" для исполнителей
+                if (role == 'worker' && tabIndex == 0) _buildRecentTasks(),
 
-              Expanded(
-                child: TaskList(
-                  tasks: _filteredTasks,
-                  isLoading: isLoading,
-                  error: error,
-                  onTaskTap: _onTaskTap,
+                TaskFilters(
+                  activeFiltersCount: _activeFiltersCount,
+                  onApply: (params) async {
+                    print('=== ПОЛУЧЕНЫ ПАРАМЕТРЫ ФИЛЬТРОВ ===');
+                    print('Все параметры: $params');
+                    print('minPrice: ${params['minPrice']}');
+                    print('radiusKm: ${params['radiusKm']}');
+                    print('userLocation: ${params['userLocation']}');
+
+                    // Сохраняем активные фильтры
+                    setState(() {
+                      _activeFilters = Map.from(params);
+                    });
+
+                    GeoPoint? geoPoint;
+                    if (params['userLocation'] != null) {
+                      geoPoint = GeoPoint(
+                        params['userLocation'].latitude,
+                        params['userLocation'].longitude,
+                      );
+                      print(
+                        'Создан GeoPoint: ${geoPoint.latitude}, ${geoPoint.longitude}',
+                      );
+                    } else {
+                      print('⚠️ userLocation равен null, GeoPoint не создан');
+                    }
+
+                    await _loadTasks(
+                      minPrice: params['minPrice'],
+                      radiusKm: params['radiusKm'],
+                      userLocation: geoPoint,
+                    );
+                  },
                 ),
-              ),
+
+                Expanded(
+                  child: TaskList(
+                    tasks: _filteredTasks,
+                    isLoading: isLoading,
+                    error: error,
+                    onTaskTap: _onTaskTap,
+                  ),
+                ),
+              ],
             ],
           ),
         ),
@@ -344,6 +489,138 @@ class _TaskScreenState extends State<TaskScreen> {
     ),
   );
 
+  /// Виджет для отображения последних заданий
+  Widget _buildRecentTasks() {
+    if (_isLoadingRecent) {
+      return Container(
+        height: 120,
+        child: const Center(child: CircularProgressIndicator()),
+      );
+    }
+
+    if (_recentTasks.isEmpty) {
+      return const SizedBox.shrink();
+    }
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        const Padding(
+          padding: EdgeInsets.only(bottom: 12),
+          child: Text(
+            'Последние задания',
+            style: TextStyle(
+              fontSize: 18,
+              fontWeight: FontWeight.bold,
+              color: Colors.black,
+            ),
+          ),
+        ),
+        SizedBox(
+          height: 120,
+          child: ListView.builder(
+            scrollDirection: Axis.horizontal,
+            itemCount: _recentTasks.length,
+            itemBuilder: (context, index) {
+              final task = _recentTasks[index];
+              return _buildRecentTaskCard(task);
+            },
+          ),
+        ),
+        const SizedBox(height: 16),
+      ],
+    );
+  }
+
+  /// Виджет карточки последнего задания
+  Widget _buildRecentTaskCard(Map<String, dynamic> task) {
+    final title = task['title'] ?? 'Без названия';
+    final price = task['price'] ?? 0;
+    final address = task['address'] ?? 'Адрес не указан';
+    final createdDate = task['created_date'] as int?;
+
+    String timeAgo = 'Недавно';
+    if (createdDate != null) {
+      final now = DateTime.now();
+      final created = DateTime.fromMillisecondsSinceEpoch(createdDate);
+      final difference = now.difference(created);
+
+      if (difference.inMinutes < 60) {
+        timeAgo = '${difference.inMinutes} мин назад';
+      } else if (difference.inHours < 24) {
+        timeAgo = '${difference.inHours} ч назад';
+      } else {
+        timeAgo = '${difference.inDays} дн назад';
+      }
+    }
+
+    return Container(
+      width: 200,
+      margin: const EdgeInsets.only(right: 12),
+      child: Card(
+        elevation: 2,
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+        child: InkWell(
+          onTap: () => _onTaskTap(task),
+          borderRadius: BorderRadius.circular(12),
+          child: Padding(
+            padding: const EdgeInsets.all(12),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  title,
+                  style: const TextStyle(
+                    fontSize: 14,
+                    fontWeight: FontWeight.bold,
+                  ),
+                  maxLines: 2,
+                  overflow: TextOverflow.ellipsis,
+                ),
+                const SizedBox(height: 8),
+                Row(
+                  children: [
+                    const Icon(Icons.location_on, size: 14, color: Colors.grey),
+                    const SizedBox(width: 4),
+                    Expanded(
+                      child: Text(
+                        address,
+                        style: const TextStyle(
+                          fontSize: 12,
+                          color: Colors.grey,
+                        ),
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                      ),
+                    ),
+                  ],
+                ),
+                const Spacer(),
+                Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                  children: [
+                    Text(
+                      '$price ₽',
+                      style: const TextStyle(
+                        fontSize: 16,
+                        fontWeight: FontWeight.bold,
+                        color: AppColors.violet,
+                      ),
+                    ),
+                    Text(
+                      timeAgo,
+                      style: const TextStyle(fontSize: 10, color: Colors.grey),
+                    ),
+                  ],
+                ),
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+
   void _onTaskTap(Map<String, dynamic> task) async {
     final orderId = task['id'].toString();
 
@@ -360,16 +637,14 @@ class _TaskScreenState extends State<TaskScreen> {
       return;
     }
 
-    // ------- ДОБАВЛЕНО: customer → если есть исполнители, открыть чат --------
+    // ------- ДОБАВЛЕНО: customer → если есть исполнители, открыть экран исполнителей --------
     final List workers = (task['workers'] ?? []) as List;
     if (role == 'customer' && workers.isNotEmpty) {
-      final chatId = await _getOrCreateChat(orderId);
-      if (!mounted) return;
-      AutoRouter.of(context).push(ChatsRoute(chatsId: chatId, taskId: orderId));
+      AutoRouter.of(context).replace(TaskExecutorsRoute(taskId: orderId));
       return;
     }
 
     // ------- иначе: открываем экран откликов --------
-    AutoRouter.of(context).push(TaskResponseRoute(taskId: orderId));
+    AutoRouter.of(context).replace(TaskResponseRoute(taskId: orderId));
   }
 }

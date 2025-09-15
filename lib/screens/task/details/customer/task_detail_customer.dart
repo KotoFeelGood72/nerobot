@@ -163,7 +163,42 @@ class _TaskDetailCustomerScreenState extends State<TaskDetailCustomerScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(title: const Text('Детали заказа')),
+      appBar: AppBar(
+        title: const Text('Детали заказа'),
+        leading: IconButton(
+          icon: const Icon(Icons.arrow_back, color: Colors.black),
+          onPressed: () {
+            // Возвращаемся на экран заданий
+            AutoRouter.of(context).replace(const TaskRoute());
+          },
+        ),
+        actions: [
+          GestureDetector(
+            onTap: () {
+              // При нажатии на иконку откликов переходим к списку откликов
+              AutoRouter.of(
+                context,
+              ).replace(TaskResponseRoute(taskId: widget.taskId));
+            },
+            child: Container(
+              padding: const EdgeInsets.only(right: 8),
+              child: const Icon(Icons.assignment_outlined, size: 28),
+            ),
+          ),
+          GestureDetector(
+            onTap: () {
+              // При нажатии на иконку исполнителей переходим к списку исполнителей
+              AutoRouter.of(
+                context,
+              ).replace(TaskExecutorsRoute(taskId: widget.taskId));
+            },
+            child: Container(
+              padding: const EdgeInsets.only(right: 16),
+              child: const Icon(Icons.people_outline, size: 28),
+            ),
+          ),
+        ],
+      ),
       body: FutureBuilder<Map<String, dynamic>?>(
         future: _fetchTask(widget.taskId),
         builder: (context, snapshot) {

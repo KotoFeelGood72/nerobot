@@ -54,7 +54,9 @@ void main() async {
   }
 
   // 6. Настраиваем локальное уведомление (когда придёт пуш в foreground)
-  const androidSettings = AndroidInitializationSettings('@mipmap/ic_launcher');
+  const androidSettings = AndroidInitializationSettings(
+    '@drawable/launcher_icon',
+  );
   const iosSettings = DarwinInitializationSettings();
   final initSettings = InitializationSettings(
     android: androidSettings,
