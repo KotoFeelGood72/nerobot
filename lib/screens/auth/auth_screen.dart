@@ -5,16 +5,13 @@ import 'package:flutter_masked_text2/flutter_masked_text2.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:firebase_messaging/firebase_messaging.dart';
 import 'package:nerobot/components/ui/Btn.dart';
-import 'package:nerobot/components/ui/Divider.dart';
 import 'package:nerobot/components/ui/Inputs.dart';
 import 'package:nerobot/constants/app_colors.dart';
 import 'package:nerobot/layouts/empty_layout.dart';
 import 'package:nerobot/router/app_router.gr.dart';
-import 'package:nerobot/utils/auth_limits.dart';
 import 'package:nerobot/utils/clean_phone.dart';
 import 'package:nerobot/utils/phone_auth_helper.dart';
 import 'package:nerobot/utils/firebase_test.dart';
-import 'package:nerobot/utils/firebase_debug.dart';
 
 @RoutePage()
 class AuthScreen extends StatefulWidget {
