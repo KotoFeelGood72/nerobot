@@ -10,7 +10,11 @@ import 'package:nerobot/components/ui/Inputs.dart';
 import 'package:nerobot/constants/app_colors.dart';
 import 'package:nerobot/layouts/empty_layout.dart';
 import 'package:nerobot/router/app_router.gr.dart';
+import 'package:nerobot/utils/auth_limits.dart';
 import 'package:nerobot/utils/clean_phone.dart';
+import 'package:nerobot/utils/phone_auth_helper.dart';
+import 'package:nerobot/utils/firebase_test.dart';
+import 'package:nerobot/utils/firebase_debug.dart';
 
 @RoutePage()
 class AuthScreen extends StatefulWidget {
@@ -26,6 +30,7 @@ class _AuthScreenState extends State<AuthScreen> {
   bool isButtonEnabled = false;
   bool isLoading = false;
   String? verificationId;
+  int retryCount = 0;
 
   @override
   void initState() {
@@ -80,11 +85,14 @@ class _AuthScreenState extends State<AuthScreen> {
 
     setState(() => isLoading = true);
     debugPrint('>>> Отправляем verifyPhone на номер: $phoneNumber');
-    await FirebaseAuth.instance.verifyPhoneNumber(
+    debugPrint('>>> Firebase project: handy-35312');
+    debugPrint('>>> Package name: com.handywork.app');
+
+    // Используем наш helper для принудительного использования нативной reCAPTCHA
+    await PhoneAuthHelper.verifyPhoneNumber(
       phoneNumber: phoneNumber,
       timeout: const Duration(seconds: 60),
-
-      verificationCompleted: (PhoneAuthCredential credential) async {
+      onVerificationCompleted: (PhoneAuthCredential credential) async {
         // Автоподстановка кода (Android), сразу логинимся:
         final userCred = await FirebaseAuth.instance.signInWithCredential(
           credential,
@@ -99,15 +107,50 @@ class _AuthScreenState extends State<AuthScreen> {
         // AutoRouter.of(context).replace(HomeRoute());
       },
 
-      verificationFailed: (FirebaseAuthException e) {
+      onVerificationFailed: (FirebaseAuthException e) {
         debugPrint('❌ Ошибка подтверждения: ${e.message}');
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text(e.message ?? 'Ошибка авторизации')),
-        );
+        debugPrint('❌ Код ошибки: ${e.code}');
+
+        String errorMessage = 'Ошибка авторизации';
+
+        // Специальная обработка для случаев с WebView reCAPTCHA
+        if (e.code == 'web-context-cancelled' ||
+            e.code == 'web-context-failed' ||
+            e.message?.contains('webview') == true ||
+            e.message?.contains('WebView') == true) {
+          errorMessage = 'Ошибка с reCAPTCHA. Попробуйте еще раз';
+        } else {
+          switch (e.code) {
+            case 'invalid-phone-number':
+              errorMessage = 'Неверный номер телефона';
+              break;
+            case 'too-many-requests':
+              errorMessage =
+                  'Слишком много попыток. Попробуйте через несколько минут';
+              // Сбрасываем счетчик попыток для возможности повторить позже
+              retryCount = 0;
+              break;
+            case 'network-request-failed':
+              errorMessage = 'Ошибка сети. Проверьте интернет-соединение';
+              break;
+            case 'captcha-check-failed':
+              errorMessage = 'Ошибка reCAPTCHA. Попробуйте еще раз';
+              break;
+            case 'invalid-app-credential':
+              errorMessage = 'Ошибка конфигурации приложения';
+              break;
+            default:
+              errorMessage = e.message ?? 'Ошибка авторизации';
+          }
+        }
+
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(SnackBar(content: Text(errorMessage)));
         setState(() => isLoading = false);
       },
 
-      codeSent: (String id, int? token) {
+      onCodeSent: (String id, int? token) {
         setState(() {
           verificationId = id;
           isLoading = false;
@@ -118,7 +161,7 @@ class _AuthScreenState extends State<AuthScreen> {
         ).push(ConfirmRoute(verificationId: id, role: role));
       },
 
-      codeAutoRetrievalTimeout: (String id) {
+      onCodeAutoRetrievalTimeout: (String id) {
         verificationId = id;
       },
     );

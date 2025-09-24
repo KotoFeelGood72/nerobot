@@ -22,7 +22,9 @@
             android:theme="@style/LaunchTheme"
             android:configChanges="orientation|keyboardHidden|keyboard|screenSize|smallestScreenSize|locale|layoutDirection|fontScale|screenLayout|density|uiMode"
             android:hardwareAccelerated="true"
-            android:windowSoftInputMode="adjustResize">
+            android:windowSoftInputMode="adjustResize"
+            android:showWhenLocked="true"
+            android:turnScreenOn="true">
             
             <!-- NormalTheme для Flutter -->
             <meta-data
@@ -33,12 +35,65 @@
                 <action android:name="android.intent.action.MAIN"/>
                 <category android:name="android.intent.category.LAUNCHER"/>
             </intent-filter>
+            
+            <!-- Intent filter для reCAPTCHA redirects -->
+            <intent-filter android:autoVerify="true">
+                <action android:name="android.intent.action.VIEW" />
+                <category android:name="android.intent.category.DEFAULT" />
+                <category android:name="android.intent.category.BROWSABLE" />
+                <data android:scheme="https"
+                      android:host="handy-35312.firebaseapp.com" />
+            </intent-filter>
+            
+            <!-- Intent filter для custom URL scheme -->
+            <intent-filter>
+                <action android:name="android.intent.action.VIEW" />
+                <category android:name="android.intent.category.DEFAULT" />
+                <category android:name="android.intent.category.BROWSABLE" />
+                <data android:scheme="nerobot" />
+            </intent-filter>
+            
+            <intent-filter>
+                <action android:name="FLUTTER_NOTIFICATION_CLICK" />
+                <category android:name="android.intent.category.DEFAULT" />
+            </intent-filter>
         </activity>
+
+        <!-- Ресиверы для flutter_local_notifications -->
+        <receiver android:exported="false" android:name="com.dexterous.flutterlocalnotifications.ScheduledNotificationReceiver" />
+        <receiver android:exported="false" android:name="com.dexterous.flutterlocalnotifications.ScheduledNotificationBootReceiver">
+            <intent-filter>
+                <action android:name="android.intent.action.BOOT_COMPLETED"/>
+                <action android:name="android.intent.action.MY_PACKAGE_REPLACED"/>
+                <action android:name="android.intent.action.QUICKBOOT_POWERON" />
+                <action android:name="com.htc.intent.action.QUICKBOOT_POWERON"/>
+            </intent-filter>
+        </receiver>
 
         <!-- Канал по умолчанию для пуш-уведомлений -->
         <meta-data
             android:name="com.google.firebase.messaging.default_notification_channel_id"
             android:value="high_importance_channel"/>
+
+        <!-- Настройки для Firebase Phone Auth и reCAPTCHA -->
+        <meta-data
+            android:name="firebase_auth_web_api_key"
+            android:value="AIzaSyAKezJnWvIKTFgmfnJ3WiE1X3i9mPhqJDI" />
+        
+        <!-- Принудительное использование нативной reCAPTCHA вместо WebView -->
+        <meta-data
+            android:name="com.google.firebase.auth.recaptcha_web_api_key"
+            android:value="AIzaSyAKezJnWvIKTFgmfnJ3WiE1X3i9mPhqJDI" />
+        
+        <!-- Настройки reCAPTCHA для правильного redirect -->
+        <meta-data
+            android:name="com.google.firebase.auth.disable_webview_recaptcha"
+            android:value="false" />
+        
+        <!-- Настройки для безопасного домена reCAPTCHA -->
+        <meta-data
+            android:name="com.google.firebase.auth.recaptcha_safe_domain"
+            android:value="handy-35312.firebaseapp.com" />
 
         <!-- Не удаляйте этот мета-дата — нужен для регистрации Flutter-плагинов -->
         <meta-data

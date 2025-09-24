@@ -10,6 +10,8 @@ import 'package:nerobot/constants/app_colors.dart';
 import 'package:nerobot/firebase_options.dart';
 import 'package:nerobot/router/app_router.dart';
 import 'package:nerobot/themes/text_themes.dart';
+import 'package:nerobot/utils/firebase_config.dart';
+import 'package:nerobot/utils/phone_auth_helper.dart';
 
 final getIt = GetIt.instance;
 
@@ -55,7 +57,7 @@ void main() async {
 
   // 6. Настраиваем локальное уведомление (когда придёт пуш в foreground)
   const androidSettings = AndroidInitializationSettings(
-    '@drawable/launcher_icon',
+    '@mipmap/ic_launcher', // Используем стандартную иконку
   );
   const iosSettings = DarwinInitializationSettings();
   final initSettings = InitializationSettings(
@@ -71,6 +73,12 @@ void main() async {
       // Здесь можно навигировать куда-то же в приложении
     },
   );
+
+  // Настраиваем Firebase Auth для использования нативной reCAPTCHA
+  FirebaseAuthConfig.configureForNativeRecaptcha();
+
+  // Настраиваем reCAPTCHA redirects
+  await PhoneAuthHelper.configureRecaptchaRedirects();
 
   runApp(MyApp());
 }

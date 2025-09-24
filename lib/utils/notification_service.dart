@@ -55,7 +55,7 @@ class NotificationService {
           'Этот канал используется для уведомлений высокой важности.',
       importance: Importance.high,
       priority: Priority.high,
-      icon: '@drawable/launcher_icon',
+      icon: '@mipmap/ic_launcher',
     );
 
     final iosDetails = DarwinNotificationDetails();

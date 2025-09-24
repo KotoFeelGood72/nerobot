@@ -35,6 +35,9 @@ android {
         targetSdk = flutter.targetSdkVersion
         versionCode = flutter.versionCode
         versionName = flutter.versionName
+        
+        // Настройки для Firebase Auth
+        manifestPlaceholders["firebase_auth_web_api_key"] = "AIzaSyAKezJnWvIKTFgmfnJ3WiE1X3i9mPhqJDI"
     }
 
     // Configure release signing using key.properties

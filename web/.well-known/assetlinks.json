@@ -1,0 +1,10 @@
+[{
+  "relation": ["delegate_permission/common.handle_all_urls"],
+  "target": {
+    "namespace": "android_app",
+    "package_name": "com.handywork.app",
+    "sha256_cert_fingerprints": [
+      "88:C3:32:BD:CF:F6:CF:B4:A5:A7:7F:60:C4:D7:79:41:61:F8:26:7B:0D:53:36:4E:CF:E7:A7:6F:0E:D7:F8:90"
+    ]
+  }
+}]
