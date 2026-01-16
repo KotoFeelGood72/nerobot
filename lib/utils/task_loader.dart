@@ -58,6 +58,15 @@ Future<List<Map<String, dynamic>>> loadTasks({
     }
   }
 
+  // --- ФИЛЬТР ПО СОЗДАТЕЛЮ ДЛЯ ЗАКАЗЧИКА (без фильтрации по городу) ---
+  if (role == 'customer') {
+    final uid = FirebaseAuth.instance.currentUser?.uid;
+    currentUserId = uid;
+    if (uid != null) {
+      query = query.where('creator', isEqualTo: uid);
+    }
+  }
+
   // --- ЦЕНА ---
   if (minPrice != null) {
     query = query.where('price', isGreaterThanOrEqualTo: minPrice);
@@ -91,8 +100,8 @@ Future<List<Map<String, dynamic>>> loadTasks({
           .map((doc) => {...doc.data() as Map<String, dynamic>, 'id': doc.id})
           .toList();
 
-  // Фильтрация по координатам города для исполнителя
-  if (role == 'worker' && userCityCoords != null) {
+  // Фильтрация по координатам города для исполнителя - только во вкладке "Новые"
+  if (role == 'worker' && currentFilter == 'tasks' && userCityCoords != null) {
     final distance = Distance();
     // Радиус для определения одного города (примерно 50 км)
     const cityRadiusMeters = 50000.0;
