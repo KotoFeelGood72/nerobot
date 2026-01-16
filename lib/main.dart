@@ -1,86 +1,122 @@
-import 'dart:io';
-
-import 'package:firebase_core/firebase_core.dart';
-import 'package:firebase_messaging/firebase_messaging.dart';
+import 'dart:ui' show PlatformDispatcher;
 import 'package:flutter/material.dart';
-import 'package:flutter_local_notifications/flutter_local_notifications.dart';
 import 'package:get_it/get_it.dart';
 import 'package:intl/date_symbol_data_local.dart';
-import 'package:nerobot/constants/app_colors.dart';
-import 'package:nerobot/firebase_options.dart';
-import 'package:nerobot/router/app_router.dart';
-import 'package:nerobot/themes/text_themes.dart';
-import 'package:nerobot/utils/firebase_config.dart';
-import 'package:nerobot/utils/phone_auth_helper.dart';
+
+import 'package:firebase_app_check/firebase_app_check.dart';
+import 'package:firebase_auth/firebase_auth.dart';
+import 'package:firebase_messaging/firebase_messaging.dart';
+import 'package:flutter_local_notifications/flutter_local_notifications.dart';
+import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:firebase_core/firebase_core.dart';
+
+import 'utils/firebase_initializer.dart';
+import 'utils/firebase_auth_config.dart';
+import 'services/user_service.dart';
+import 'utils/subscription_utils.dart';
+import 'router/app_router.dart';
+import 'constants/app_colors.dart';
+import 'themes/text_themes.dart';
+import 'firebase_options.dart';
 
 final getIt = GetIt.instance;
+final _ln = FlutterLocalNotificationsPlugin();
 
-/// 1. Фоновый хендлер — всегда должен быть top-level (не внутри класса)
 Future<void> _firebaseMessagingBackgroundHandler(RemoteMessage message) async {
-  // Это будет вызвано, когда пуш придёт в фоне (app killed или background).
-  await Firebase.initializeApp(options: DefaultFirebaseOptions.currentPlatform);
-  debugPrint('📥 Получено фоновое сообщение: ${message.messageId}');
-  // Здесь можно показать локальное уведомление или обработать данные.
+  // Each background isolate may require its own Firebase initialization.
+  try {
+    if (Firebase.apps.isEmpty) {
+      await Firebase.initializeApp(options: DefaultFirebaseOptions.currentPlatform);
+    }
+  } catch (e) {
+    //ignore
+  }
+  debugPrint('📩 Background push: ${message.messageId}');
 }
 
-/// 2. Локальный notifications-плагин (для отображения пушей в foreground)
-final FlutterLocalNotificationsPlugin _flutterLocalNotificationsPlugin =
-    FlutterLocalNotificationsPlugin();
-
-/// 3. Конфигурация для Android Notification Channel
-const AndroidNotificationChannel _highImportanceChannel =
-    AndroidNotificationChannel(
-      'high_importance_channel', // id
-      'High Importance Notifications', // title
-      description: 'Этот канал используется для уведомлений высокой важности.',
-      importance: Importance.high,
-    );
-
-void main() async {
+Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
-  getIt.registerSingleton<AppRouter>(AppRouter());
-  await Firebase.initializeApp(options: DefaultFirebaseOptions.currentPlatform);
-  await initializeDateFormatting('ru_RU', null);
 
-  // 4. Регистрируем фоновый хендлер
-  FirebaseMessaging.onBackgroundMessage(_firebaseMessagingBackgroundHandler);
+  // detect if this is a background/isolate entrypoint created by a plugin
+  final String initialRoute = PlatformDispatcher.instance.defaultRouteName;
+  final bool isBackgroundIsolate = initialRoute != '/' && initialRoute.isNotEmpty;
 
-  // 5. Инициализируем локальный плагин
-  if (Platform.isAndroid) {
-    // Для Android: создаём канал до инициализации плагина
-    await _flutterLocalNotificationsPlugin
-        .resolvePlatformSpecificImplementation<
-          AndroidFlutterLocalNotificationsPlugin
-        >()
-        ?.createNotificationChannel(_highImportanceChannel);
+  if (!isBackgroundIsolate) {
+    await FirebaseInitializer.initialize();
+  } else {
+    debugPrint('Main skipped Firebase initialization because this is a background isolate. route=$initialRoute');
   }
 
-  // 6. Настраиваем локальное уведомление (когда придёт пуш в foreground)
-  const androidSettings = AndroidInitializationSettings(
-    '@mipmap/ic_launcher', // Используем стандартную иконку
-  );
-  const iosSettings = DarwinInitializationSettings();
-  final initSettings = InitializationSettings(
-    android: androidSettings,
-    iOS: iosSettings,
-  );
+  getIt.registerSingleton<AppRouter>(AppRouter());
 
-  await _flutterLocalNotificationsPlugin.initialize(
-    initSettings,
-    onDidReceiveNotificationResponse: (NotificationResponse response) {
-      // Эта коллбэк будет вызвана, когда пользователь тапнет на пуш (foreground)
-      debugPrint('🖱 Notification tapped: ${response.payload}');
-      // Здесь можно навигировать куда-то же в приложении
-    },
-  );
+  // Activate App Check (debug provider for development)
+  try {
+    await FirebaseAppCheck.instance.activate(androidProvider: AndroidProvider.debug);
+    debugPrint("🛡 AppCheck activated");
+  } catch (e) {
+    debugPrint("❌ AppCheck error: $e");
+  }
 
-  // Настраиваем Firebase Auth для использования нативной reCAPTCHA
-  FirebaseAuthConfig.configureForNativeRecaptcha();
+  FirebaseAuthConfig.configureForProduction();
+  await initializeDateFormatting('ru_RU');
 
-  // Настраиваем reCAPTCHA redirects
-  await PhoneAuthHelper.configureRecaptchaRedirects();
+  FirebaseMessaging.onBackgroundMessage(_firebaseMessagingBackgroundHandler);
 
-  runApp(MyApp());
+  const android = AndroidInitializationSettings('@mipmap/ic_launcher');
+  const ios = DarwinInitializationSettings();
+  await _ln.initialize(const InitializationSettings(android: android, iOS: ios));
+
+  // Listen for auth changes and ensure user doc + trial subscription
+  FirebaseAuth.instance.authStateChanges().listen((User? user) async {
+    debugPrint("ℹ️ authStateChanges: user == ${user?.uid}");
+    if (user != null) {
+      final ok = await UserService.createUserIfNotExists(user, "user");
+      if (ok) {
+        // ensure trial - note: this will attempt Firestore access; may fail if offline/block
+        try {
+          await SubscriptionUtils.ensureFreeTrial(user.uid);
+        } catch (e) {
+          debugPrint('⚠️ ensureFreeTrial failed: $e');
+        }
+      }
+    }
+  });
+
+  // Debug helpers: print Firebase info and try a simple write (non-invasive)
+  // Run only in main engine
+  if (!isBackgroundIsolate) {
+    debugFirebaseInfo();
+    await testConnectFirestore();
+  }
+
+  runApp(const MyApp());
+}
+
+/// Debug: print Firebase apps info
+void debugFirebaseInfo() {
+  try {
+    for (final app in Firebase.apps) {
+      final opts = app.options;
+      debugPrint('FIREBASE APP name=${app.name} projectId=${opts.projectId} appId=${opts.appId} apiKey=${opts.apiKey}');
+    }
+    debugPrint('Firestore instance: ${FirebaseFirestore.instance}');
+  } catch (e) {
+    debugPrint('debugFirebaseInfo ERROR: $e');
+  }
+}
+
+/// Debug: simple write/read to verify Firestore connectivity
+Future<void> testConnectFirestore() async {
+  try {
+    final docRef = FirebaseFirestore.instance.collection('debug_connect').doc('ping');
+    await docRef.set({'ts': FieldValue.serverTimestamp()});
+    final snap = await docRef.get();
+    debugPrint('TEST FIRESTORE OK: exists=${snap.exists} data=${snap.data()}');
+  } on FirebaseException catch (e) {
+    debugPrint('TEST FIRESTORE FIREBASE ERROR: code=${e.code} message=${e.message}');
+  } catch (e, st) {
+    debugPrint('TEST FIRESTORE ERROR: $e\n$st');
+  }
 }
 
 class MyApp extends StatelessWidget {
@@ -96,10 +132,7 @@ class MyApp extends StatelessWidget {
       theme: ThemeData(
         appBarTheme: const AppBarTheme(
           backgroundColor: Colors.white,
-          surfaceTintColor: Colors.white,
-          shadowColor: Colors.transparent,
           elevation: 0,
-          foregroundColor: Colors.white,
           iconTheme: IconThemeData(color: Colors.black),
           titleTextStyle: TextStyle(
             color: Colors.black,
@@ -108,6 +141,7 @@ class MyApp extends StatelessWidget {
           ),
         ),
         scaffoldBackgroundColor: Colors.white,
+        textTheme: buildTextTheme(),
         colorScheme: ColorScheme.fromSwatch(
           primarySwatch: MaterialColor(AppColors.violet.value, {
             50: AppColors.violet.withOpacity(0.1),
@@ -122,8 +156,6 @@ class MyApp extends StatelessWidget {
             900: AppColors.violet,
           }),
         ),
-        primarySwatch: Colors.blue,
-        textTheme: buildTextTheme(),
       ),
     );
   }

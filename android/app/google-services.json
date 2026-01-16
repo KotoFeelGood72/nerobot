@@ -7,9 +7,9 @@
   "client": [
     {
       "client_info": {
-        "mobilesdk_app_id": "1:408622761678:android:8ef469e8e25b6f9319f29f",
+        "mobilesdk_app_id": "1:408622761678:android:9d16dbf09827eadc19f29f",
         "android_client_info": {
-          "package_name": "com.handywork.app"
+          "package_name": "com.sprestay.handyman"
         }
       },
       "oauth_client": [],

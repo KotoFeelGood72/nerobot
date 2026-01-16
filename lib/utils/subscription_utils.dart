@@ -1,157 +1,99 @@
+import 'package:flutter/foundation.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:nerobot/models/subscription.dart';
 
 class SubscriptionUtils {
-  static final FirebaseFirestore _firestore = FirebaseFirestore.instance;
+  static final _db = FirebaseFirestore.instance;
 
-  /// Получает активную подписку пользователя
+  /// 🔥 ГЛАВНАЯ ФУНКЦИЯ — гарантирует триал
+  static Future<void> ensureFreeTrial(String userId) async {
+    final uid = userId.trim();
+
+    try {
+      final active = await getActiveSubscription(uid);
+      if (active != null) {
+        debugPrint('ℹ️ Active subscription already exists');
+        return;
+      }
+
+      await _createTrial(uid);
+      await _syncUserSubscription(uid);
+
+      debugPrint('✅ Trial subscription granted for $uid');
+    } catch (e, st) {
+      debugPrint('❌ ensureFreeTrial ERROR: $e\n$st');
+    }
+  }
+
+  /// 🔍 Проверка активной подписки
   static Future<Subscription?> getActiveSubscription(String userId) async {
     try {
-      final querySnapshot = await _firestore
+      final snap = await _db
           .collection('subscriptions')
           .where('userId', isEqualTo: userId)
-          .get(const GetOptions(source: Source.server));
+          .where('status', isEqualTo: 'active')
+          .get();
 
-      if (querySnapshot.docs.isEmpty) return null;
+      if (snap.docs.isEmpty) return null;
 
-      // Сортируем по дате окончания (новые сначала) и берем первую
-      final subscriptions =
-          querySnapshot.docs
-              .map((doc) => Subscription.fromFirestore(doc))
-              .toList()
-            ..sort((a, b) => b.endDate.compareTo(a.endDate));
-
-      print('DEBUG: Найдено подписок: ${subscriptions.length}');
-      print(
-        'DEBUG: Статусы подписок: ${subscriptions.map((s) => s.status).toList()}',
-      );
-
-      // Фильтруем только активные подписки (не отмененные)
-      final activeSubscriptions =
-          subscriptions.where((s) => s.status != 'cancelled').toList();
-
-      print(
-        'DEBUG: Активных подписок после фильтрации: ${activeSubscriptions.length}',
-      );
-
-      if (activeSubscriptions.isEmpty) return null;
-
-      final subscription = activeSubscriptions.first;
-      print('DEBUG: Возвращаем подписку со статусом: ${subscription.status}');
-
-      // Проверяем, что подписка действительно активна (не истекла)
-      if (subscription.isActive) {
-        return subscription;
-      } else {
-        // Если подписка истекла, обновляем её статус
-        await _firestore
-            .collection('subscriptions')
-            .doc(subscription.id)
-            .update({'status': 'expired'});
-        return null;
-      }
+      return Subscription.fromFirestore(snap.docs.first);
     } catch (e) {
-      print('Ошибка при получении активной подписки: $e');
+      debugPrint('❌ getActiveSubscription ERROR: $e');
       return null;
     }
   }
 
-  /// Создает новую подписку
-  static Future<String> createSubscription(Subscription subscription) async {
-    final docRef = await _firestore
-        .collection('subscriptions')
-        .add(subscription.toFirestore());
-    return docRef.id;
-  }
-
-  /// Создает бесплатную подписку на 1 месяц для нового пользователя
-  static Future<String> createFreeTrialSubscription(String userId) async {
+  /// 🆓 Создание триала
+  static Future<void> _createTrial(String userId) async {
     final now = DateTime.now();
-    final endDate = now.add(const Duration(days: 30)); // 1 месяц
+    final end = now.add(const Duration(days: 90));
 
-    final subscription = Subscription(
-      id: '',
+    final sub = Subscription(
+      id: userId,
       userId: userId,
       type: 'trial',
-      period: 1,
-      startDate: now,
-      endDate: endDate,
-      status: 'active',
-      amount: 0.0,
-      paymentId: '', // Пустая строка для бесплатной подписки
-    );
-
-    final docRef = await _firestore
-        .collection('subscriptions')
-        .add(subscription.toFirestore());
-
-    print('DEBUG: Создана бесплатная подписка для пользователя $userId');
-    return docRef.id;
-  }
-
-  /// Обновляет статус подписки
-  static Future<void> updateSubscriptionStatus(
-    String subscriptionId,
-    String status,
-  ) async {
-    print('DEBUG: Обновляем статус подписки $subscriptionId на $status');
-
-    await _firestore.collection('subscriptions').doc(subscriptionId).update({
-      'status': status,
-    });
-
-    print('DEBUG: Статус подписки успешно обновлен');
-
-    // Небольшая задержка для обработки изменений в Firestore
-    await Future.delayed(const Duration(milliseconds: 500));
-  }
-
-  /// Получает все подписки пользователя
-  static Future<List<Subscription>> getUserSubscriptions(String userId) async {
-    try {
-      final querySnapshot = await _firestore
-          .collection('subscriptions')
-          .where('userId', isEqualTo: userId)
-          .get(const GetOptions(source: Source.server));
-
-      final subscriptions =
-          querySnapshot.docs
-              .map((doc) => Subscription.fromFirestore(doc))
-              .toList();
-
-      // Сортировка по дате начала (новые сначала)
-      subscriptions.sort((a, b) => b.startDate.compareTo(a.startDate));
-
-      return subscriptions;
-    } catch (e) {
-      print('Ошибка при получении подписок пользователя: $e');
-      return [];
-    }
-  }
-
-  /// Создает тестовую подписку
-  static Future<void> createTestSubscription(String userId) async {
-    final now = DateTime.now();
-    final endDate = now.add(const Duration(days: 90)); // 3 месяца
-
-    final subscription = Subscription(
-      id: '',
-      userId: userId,
-      type: 'quarterly',
       period: 3,
       startDate: now,
-      endDate: endDate,
+      endDate: end,
       status: 'active',
-      amount: 699.0,
-      paymentId: 'test_payment_id',
+      amount: 0,
+      paymentId: '',
     );
 
-    await createSubscription(subscription);
+    await _db
+        .collection('subscriptions')
+        .doc(userId)
+        .set(sub.toFirestore());
+
+    debugPrint('✅ Trial subscription created');
   }
 
-  /// Проверяет, есть ли у пользователя активная подписка
-  static Future<bool> hasActiveSubscription(String userId) async {
-    final subscription = await getActiveSubscription(userId);
-    return subscription != null && subscription.isActive;
+  /// 🔄 СИНХРОНИЗАЦИЯ USERS ← SUBSCRIPTIONS (ЭТОГО У ТЕБЯ НЕ БЫЛО)
+  static Future<void> _syncUserSubscription(String userId) async {
+    await _db.collection('users').doc(userId).set({
+      'subscription_status': true,
+      'subscription_type': 'trial',
+      'subscription_days': 90,
+    }, SetOptions(merge: true));
+
+    debugPrint('✅ User subscription synced');
+  }
+
+  // ==========================================================
+  // ⬇️⬇️⬇️ ЧТОБЫ НЕ ПАДАЛ БИЛД (старые вызовы экранов)
+  // ==========================================================
+
+  static Future<String> createSubscription(Subscription s) async {
+    final ref = await _db.collection('subscriptions').add(s.toFirestore());
+    return ref.id;
+  }
+
+  static Future<void> updateSubscriptionStatus(
+    String id,
+    String status,
+  ) async {
+    await _db.collection('subscriptions').doc(id).update({
+      'status': status,
+    });
   }
 }

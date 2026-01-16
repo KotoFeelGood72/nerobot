@@ -1,3 +1,4 @@
+import 'dart:async'; // для unawaited()
 import 'package:auto_route/auto_route.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
@@ -39,25 +40,15 @@ class _ProfileScreenState extends State<ProfileScreen> {
     if (uid == null) return;
 
     try {
-      // Загружаем данные пользователя
       final doc =
           await FirebaseFirestore.instance.collection('users').doc(uid).get();
       final data = doc.data();
 
-      // Загружаем активную подписку
       final subscription = await SubscriptionUtils.getActiveSubscription(uid!);
-
-      // Локально сохраненная роль (на случай, если в БД нет типа)
       final savedRole = await RoleManager.getRole();
 
-      print('DEBUG: Загружена подписка: ${subscription?.status}');
-      print('DEBUG: Подписка активна: ${subscription?.isActive}');
-
       setState(() {
-        role =
-            (data?['type'] as String?) ??
-            savedRole ??
-            'worker'; // По умолчанию исполнитель
+        role = (data?['type'] as String?) ?? savedRole ?? 'worker';
         notifCandidate =
             data?['notificationPreferences']?['candidate'] ?? false;
         notifCityTask = data?['notificationPreferences']?['cityTask'] ?? false;
@@ -66,75 +57,56 @@ class _ProfileScreenState extends State<ProfileScreen> {
       });
     } catch (e) {
       print('Ошибка при загрузке данных пользователя: $e');
-      setState(() {
-        isLoading = false;
-      });
+      setState(() => isLoading = false);
     }
   }
 
-  // --------------------------- Обновление роли -----------------------------
+  // мгновенное переключение роли
   Future<void> _updateRole(String newRole) async {
     if (uid == null || (newRole != 'worker' && newRole != 'customer')) return;
 
-    await FirebaseFirestore.instance.collection('users').doc(uid).update({
-      'type': newRole,
-    });
-
-    // Сохраняем локально, чтобы роль не «пропадала» без сети
-    await RoleManager.saveRole(newRole);
+    // ⚡ Мгновенно обновляем UI
     setState(() => role = newRole);
+    await RoleManager.saveRole(newRole);
+
+    // 🕓 Обновляем Firestore в фоне (не блокируя интерфейс)
+    unawaited(
+      FirebaseFirestore.instance.collection('users').doc(uid).update({
+        'type': newRole,
+      }),
+    );
   }
 
-  // --------------------------- Выход из аккаунта ---------------------------
+  // выход
   Future<void> _signOut() async {
-    // Очищаем сохраненную роль при выходе
     await RoleManager.clearRole();
     await FirebaseAuth.instance.signOut();
     if (mounted) AutoRouter.of(context).replace(const WelcomeRoute());
   }
 
   Future<void> _refreshData() async {
-    setState(() {
-      isLoading = true;
-    });
-    await _loadUserData();
-  }
-
-  Future<void> _forceRefreshData() async {
-    setState(() {
-      isLoading = true;
-    });
-
-    // Принудительно очищаем кэш и загружаем данные заново
-    await Future.delayed(const Duration(milliseconds: 1000));
+    setState(() => isLoading = true);
     await _loadUserData();
   }
 
   String get notificationSubtitle {
-    if (notifCandidate == true || notifCityTask == true) {
-      return 'Включены';
-    }
+    if (notifCandidate == true || notifCityTask == true) return 'Включены';
     return 'Выключены';
   }
 
   String get subscriptionSubtitle {
-    if (activeSubscription == null) {
-      return 'Нет активной подписки';
-    }
-    if (activeSubscription!.status == 'cancelled') {
-      return 'Подписка отменена';
-    }
-    if (!activeSubscription!.isActive) {
-      return 'Подписка истекла';
-    }
+    if (activeSubscription == null) return 'Нет активной подписки';
+    if (activeSubscription!.status == 'cancelled') return 'Подписка отменена';
+    if (!activeSubscription!.isActive) return 'Подписка истекла';
     return 'Истечёт через: ${activeSubscription!.remainingTimeText}';
   }
 
-  // -------------------------------------------------------------------------
   @override
   Widget build(BuildContext context) {
     if (isLoading) {
-      return const Scaffold(body: Center(child: CircularProgressIndicator()));
+      return const Scaffold(
+        body: Center(child: CircularProgressIndicator()),
+      );
     }
 
     return Scaffold(
@@ -149,7 +121,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
         actions: [
           IconButton(
             icon: const Icon(Icons.refresh),
-            onPressed: _loadUserData,
+            onPressed: _refreshData,
             tooltip: 'Обновить',
           ),
         ],
@@ -159,7 +131,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
         children: [
           const SizedBox(height: 16),
 
-          // ---------------------------- переключатель роли -----------------
+          // переключатель роли
           Padding(
             padding: const EdgeInsets.symmetric(horizontal: 16),
             child: Container(
@@ -171,7 +143,6 @@ class _ProfileScreenState extends State<ProfileScreen> {
               ),
               child: Row(
                 children: [
-                  // ----------- worker ------------
                   Expanded(
                     child: GestureDetector(
                       onTap: () => _updateRole('worker'),
@@ -181,7 +152,6 @@ class _ProfileScreenState extends State<ProfileScreen> {
                       ),
                     ),
                   ),
-                  // ---------- customer -----------
                   Expanded(
                     child: GestureDetector(
                       onTap: () => _updateRole('customer'),
@@ -198,14 +168,14 @@ class _ProfileScreenState extends State<ProfileScreen> {
 
           const SizedBox(height: 16),
 
-          // --------------------------- прочие пункты ------------------------
+          // список
           Expanded(
             child: ProfileList(
               options: [
                 ProfileOption(
                   title: 'Личные данные',
-                  onTap:
-                      () => AutoRouter.of(context).push(ProfileUserDataRoute()),
+                  onTap: () =>
+                      AutoRouter.of(context).push(ProfileUserDataRoute()),
                 ),
                 ProfileOption(
                   title: 'Рейтинг и отзывы',
@@ -215,30 +185,24 @@ class _ProfileScreenState extends State<ProfileScreen> {
                   title: 'Уведомления',
                   subtitle: notificationSubtitle,
                   onTap: () async {
-                    final result = await AutoRouter.of(
-                      context,
-                    ).push(const ProfileNoteRoute());
-                    if (result == true) {
-                      _loadUserData();
-                    }
+                    final result = await AutoRouter.of(context)
+                        .push(const ProfileNoteRoute());
+                    if (result == true) _loadUserData();
                   },
                 ),
                 ProfileOption(
                   title: 'Подписка',
                   subtitle: subscriptionSubtitle,
                   onTap: () async {
-                    final result = await AutoRouter.of(
-                      context,
-                    ).push(ProfileSubscriptionRoute());
-                    // Всегда обновляем данные при возврате из экрана подписки
+                    await AutoRouter.of(context)
+                        .push(ProfileSubscriptionRoute());
                     _loadUserData();
                   },
                 ),
                 ProfileOption(
                   title: 'О приложении',
-                  onTap:
-                      () =>
-                          AutoRouter.of(context).push(const ProfileAppRoute()),
+                  onTap: () =>
+                      AutoRouter.of(context).push(const ProfileAppRoute()),
                 ),
                 ProfileOption(
                   title: 'Помощь',
@@ -248,7 +212,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
             ),
           ),
 
-          // ------------------------------- выход ----------------------------
+          // кнопка выхода
           Btn(
             text: 'Выйти',
             onPressed: _signOut,
@@ -262,7 +226,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
     );
   }
 
-  // ------------------------- util: «чип» роли ------------------------------
+  // компонент чипа роли
   Widget _roleChip({required bool active, required String label}) {
     return Container(
       padding: const EdgeInsets.symmetric(vertical: 10),
