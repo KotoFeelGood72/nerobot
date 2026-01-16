@@ -1,5 +1,6 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
+import 'package:latlong2/latlong.dart';
 
 Future<List<Map<String, dynamic>>> loadTasks({
   required String role,
@@ -25,20 +26,34 @@ Future<List<Map<String, dynamic>>> loadTasks({
     query = query.where('status', whereIn: ['done', 'cancelled']);
   }
 
-  // --- ФИЛЬТР ПО ГОРОДУ ДЛЯ ИСПОЛНИТЕЛЯ ---
+  // --- ФИЛЬТР ПО КООРДИНАТАМ ГОРОДА ДЛЯ ИСПОЛНИТЕЛЯ ---
+  LatLng? userCityCoords;
+  String? currentUserId;
   if (role == 'worker') {
     final uid = FirebaseAuth.instance.currentUser?.uid;
+    currentUserId = uid;
 
     if (uid != null) {
-      final userSnap = await FirebaseFirestore.instance
-          .collection('users')
-          .doc(uid)
-          .get();
+      final userSnap =
+          await FirebaseFirestore.instance.collection('users').doc(uid).get();
 
-      final city = userSnap.data()?['city'];
+      final userData = userSnap.data();
 
-      if (city != null && city.toString().isNotEmpty) {
-        query = query.where('city', isEqualTo: city);
+      // Получаем координаты города пользователя
+      if (userData != null) {
+        final cityLat = userData['city_lat'];
+        final cityLng = userData['city_lng'];
+
+        if (cityLat != null && cityLng != null) {
+          userCityCoords = LatLng(
+            (cityLat is num)
+                ? cityLat.toDouble()
+                : double.tryParse(cityLat.toString()) ?? 0.0,
+            (cityLng is num)
+                ? cityLng.toDouble()
+                : double.tryParse(cityLng.toString()) ?? 0.0,
+          );
+        }
       }
     }
   }
@@ -71,10 +86,55 @@ Future<List<Map<String, dynamic>>> loadTasks({
 
   final snapshot = await query.get();
 
-  return snapshot.docs
-      .map((doc) => {
-            ...doc.data() as Map<String, dynamic>,
-            'id': doc.id,
-          })
-      .toList();
+  var tasks =
+      snapshot.docs
+          .map((doc) => {...doc.data() as Map<String, dynamic>, 'id': doc.id})
+          .toList();
+
+  // Фильтрация по координатам города для исполнителя
+  if (role == 'worker' && userCityCoords != null) {
+    final distance = Distance();
+    // Радиус для определения одного города (примерно 50 км)
+    const cityRadiusMeters = 50000.0;
+
+    tasks =
+        tasks.where((task) {
+          final taskLat = task['lat'];
+          final taskLng = task['lng'];
+
+          if (taskLat == null || taskLng == null) {
+            return false;
+          }
+
+          final taskCoords = LatLng(
+            (taskLat is num)
+                ? taskLat.toDouble()
+                : double.tryParse(taskLat.toString()) ?? 0.0,
+            (taskLng is num)
+                ? taskLng.toDouble()
+                : double.tryParse(taskLng.toString()) ?? 0.0,
+          );
+
+          final distanceMeters = distance.as(
+            LengthUnit.Meter,
+            userCityCoords!,
+            taskCoords,
+          );
+
+          return distanceMeters <= cityRadiusMeters;
+        }).toList();
+  }
+
+  // Для вкладки "Открытые" у исполнителя показываем только задания, на которые он откликнулся
+  if (role == 'worker' && currentFilter == 'open' && currentUserId != null) {
+    tasks =
+        tasks.where((task) {
+          final responses = task['responses'];
+          if (responses == null) return false;
+          if (responses is! List) return false;
+          return responses.contains(currentUserId);
+        }).toList();
+  }
+
+  return tasks;
 }

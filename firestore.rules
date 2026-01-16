@@ -1,0 +1,94 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    
+    // Правила для коллекции responses
+    match /responses/{responseId} {
+      // Разрешаем создание документа аутентифицированным пользователям
+      allow create: if request.auth != null 
+        && request.resource.data.respondent == request.auth.uid;
+      
+      // Разрешаем чтение создателю отклика или создателю заказа
+      allow read: if request.auth != null 
+        && (resource.data.respondent == request.auth.uid 
+            || resource.data.order_creator == request.auth.uid);
+      
+      // Разрешаем обновление только создателю отклика
+      allow update: if request.auth != null 
+        && resource.data.respondent == request.auth.uid;
+      
+      // Разрешаем удаление только создателю отклика
+      allow delete: if request.auth != null 
+        && resource.data.respondent == request.auth.uid;
+    }
+    
+    // Правила для коллекции orders
+    match /orders/{orderId} {
+      // Разрешаем чтение всем аутентифицированным пользователям
+      allow read: if request.auth != null;
+      
+      // Разрешаем создание аутентифицированным пользователям
+      allow create: if request.auth != null 
+        && request.resource.data.creator == request.auth.uid;
+      
+      // Разрешаем обновление создателю заказа или для добавления в массив responses
+      allow update: if request.auth != null 
+        && (resource.data.creator == request.auth.uid
+            || request.resource.data.diff(resource.data).affectedKeys()
+                .hasOnly(['responses']));
+      
+      // Разрешаем удаление только создателю заказа
+      allow delete: if request.auth != null 
+        && resource.data.creator == request.auth.uid;
+    }
+    
+    // Правила для коллекции users
+    match /users/{userId} {
+      // Разрешаем чтение всем аутентифицированным пользователям
+      allow read: if request.auth != null;
+      
+      // Разрешаем создание и обновление только для своего документа
+      allow create, update: if request.auth != null 
+        && userId == request.auth.uid;
+      
+      // Разрешаем удаление только своего документа
+      allow delete: if request.auth != null 
+        && userId == request.auth.uid;
+    }
+    
+    // Правила для коллекции chats
+    match /chats/{chatId} {
+      // Разрешаем чтение участникам чата
+      allow read: if request.auth != null 
+        && request.auth.uid in resource.data.get('participants', []);
+      
+      // Разрешаем создание аутентифицированным пользователям
+      allow create: if request.auth != null;
+      
+      // Разрешаем обновление участникам чата
+      allow update: if request.auth != null 
+        && request.auth.uid in resource.data.get('participants', []);
+    }
+    
+    // Правила для коллекции subscriptions
+    match /subscriptions/{subscriptionId} {
+      // Разрешаем чтение только владельцу подписки
+      allow read: if request.auth != null 
+        && resource.data.userId == request.auth.uid;
+      
+      // Разрешаем создание и обновление только для своей подписки
+      allow create, update: if request.auth != null 
+        && request.resource.data.userId == request.auth.uid;
+    }
+    
+    // Правила для коллекции feedbacks
+    match /feedbacks/{feedbackId} {
+      // Разрешаем создание аутентифицированным пользователям
+      allow create: if request.auth != null 
+        && request.resource.data.userId == request.auth.uid;
+      
+      // Разрешаем чтение только администраторам (можно настроить дополнительно)
+      allow read: if request.auth != null;
+    }
+  }
+}

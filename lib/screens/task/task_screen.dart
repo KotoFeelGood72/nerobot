@@ -3,6 +3,7 @@ import 'package:auto_route/auto_route.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
+import 'package:latlong2/latlong.dart';
 import 'package:nerobot/components/bar/bottom_nav_bar.dart';
 import 'package:nerobot/components/list/task_list.dart';
 import 'package:nerobot/components/ui/task_filters.dart';
@@ -108,21 +109,21 @@ class _TaskScreenState extends State<TaskScreen> {
         .doc(uid)
         .snapshots()
         .listen((snap) async {
-      final newRole = snap.data()?['type'] ?? 'worker';
-      if (newRole != role) {
-        setState(() {
-          role = newRole;
-          tabIndex = 0;
-          isLoading = true;
-          searchQuery = '';
-          _searchController.clear();
+          final newRole = snap.data()?['type'] ?? 'worker';
+          if (newRole != role) {
+            setState(() {
+              role = newRole;
+              tabIndex = 0;
+              isLoading = true;
+              searchQuery = '';
+              _searchController.clear();
+            });
+            await _loadTasks();
+            if (role == 'worker') {
+              await _loadRecentTasks();
+            }
+          }
         });
-        await _loadTasks();
-        if (role == 'worker') {
-          await _loadRecentTasks();
-        }
-      }
-    });
   }
 
   // ---------------- LOAD TASKS ----------------
@@ -164,12 +165,28 @@ class _TaskScreenState extends State<TaskScreen> {
     try {
       final uid = FirebaseAuth.instance.currentUser!.uid;
 
-      final userSnap = await FirebaseFirestore.instance
-          .collection('users')
-          .doc(uid)
-          .get();
+      final userSnap =
+          await FirebaseFirestore.instance.collection('users').doc(uid).get();
 
-      final city = userSnap.data()?['city'];
+      final userData = userSnap.data();
+
+      // Получаем координаты города пользователя
+      LatLng? userCityCoords;
+      if (userData != null) {
+        final cityLat = userData['city_lat'];
+        final cityLng = userData['city_lng'];
+
+        if (cityLat != null && cityLng != null) {
+          userCityCoords = LatLng(
+            (cityLat is num)
+                ? cityLat.toDouble()
+                : double.tryParse(cityLat.toString()) ?? 0.0,
+            (cityLng is num)
+                ? cityLng.toDouble()
+                : double.tryParse(cityLng.toString()) ?? 0.0,
+          );
+        }
+      }
 
       Query query = FirebaseFirestore.instance
           .collection('orders')
@@ -177,18 +194,54 @@ class _TaskScreenState extends State<TaskScreen> {
           .where('active', isEqualTo: true)
           .where('deleted', isEqualTo: false);
 
-      if (city != null && city.toString().isNotEmpty) {
-        query = query.where('city', isEqualTo: city);
+      final snap =
+          await query
+              .orderBy('created_date', descending: true)
+              .limit(50) // Увеличиваем лимит для последующей фильтрации
+              .get();
+
+      var tasks =
+          snap.docs
+              .map((d) => {...d.data() as Map<String, dynamic>, 'id': d.id})
+              .toList();
+
+      // Фильтрация по координатам города
+      if (userCityCoords != null) {
+        final distance = Distance();
+        // Радиус для определения одного города (примерно 50 км)
+        const cityRadiusMeters = 50000.0;
+
+        tasks =
+            tasks.where((task) {
+              final taskLat = task['lat'];
+              final taskLng = task['lng'];
+
+              if (taskLat == null || taskLng == null) {
+                return false;
+              }
+
+              final taskCoords = LatLng(
+                (taskLat is num)
+                    ? taskLat.toDouble()
+                    : double.tryParse(taskLat.toString()) ?? 0.0,
+                (taskLng is num)
+                    ? taskLng.toDouble()
+                    : double.tryParse(taskLng.toString()) ?? 0.0,
+              );
+
+              final distanceMeters = distance.as(
+                LengthUnit.Meter,
+                userCityCoords!,
+                taskCoords,
+              );
+
+              return distanceMeters <= cityRadiusMeters;
+            }).toList();
       }
 
-      final snap = await query
-          .orderBy('created_date', descending: true)
-          .limit(5)
-          .get();
-
+      // Берем первые 5 после фильтрации
       setState(() {
-        _recentTasks =
-            snap.docs.map((d) => {...d.data() as Map<String, dynamic>, 'id': d.id}).toList();
+        _recentTasks = tasks.take(5).toList();
       });
     } catch (e) {
       debugPrint('Recent tasks error: $e');
@@ -206,17 +259,20 @@ class _TaskScreenState extends State<TaskScreen> {
     }
 
     final titles =
-        role == 'worker' ? ['Новые', 'Открытые', 'История'] : ['Открытые', 'История'];
+        role == 'worker'
+            ? ['Новые', 'Открытые', 'История']
+            : ['Открытые', 'История'];
 
     return Scaffold(
       appBar: AppBar(
-        title: _isSearching
-            ? TextField(
-                controller: _searchController,
-                autofocus: true,
-                decoration: const InputDecoration(hintText: 'Поиск'),
-              )
-            : const Text('Задания'),
+        title:
+            _isSearching
+                ? TextField(
+                  controller: _searchController,
+                  autofocus: true,
+                  decoration: const InputDecoration(hintText: 'Поиск'),
+                )
+                : const Text('Задания'),
         actions: [
           IconButton(
             icon: Icon(_isSearching ? Icons.close : Icons.search),
@@ -271,39 +327,41 @@ class _TaskScreenState extends State<TaskScreen> {
   }
 
   Widget _buildTabs(List<String> titles) => Row(
-        children: List.generate(titles.length, (i) {
-          final active = tabIndex == i;
-          return Expanded(
-            child: GestureDetector(
-              onTap: () {
-                setState(() => tabIndex = i);
-                _loadTasks();
-              },
-              child: Container(
-                padding: const EdgeInsets.all(12),
-                color: active ? Colors.white : Colors.grey[200],
-                child: Center(child: Text(titles[i])),
-              ),
-            ),
-          );
-        }),
+    children: List.generate(titles.length, (i) {
+      final active = tabIndex == i;
+      return Expanded(
+        child: GestureDetector(
+          onTap: () {
+            setState(() => tabIndex = i);
+            _loadTasks();
+          },
+          child: Container(
+            padding: const EdgeInsets.all(12),
+            color: active ? Colors.white : Colors.grey[200],
+            child: Center(child: Text(titles[i])),
+          ),
+        ),
       );
+    }),
+  );
 
   Widget _buildRecentTasks() {
     if (_recentTasks.isEmpty) return const SizedBox.shrink();
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        const Text('Последние задания',
-            style: TextStyle(fontWeight: FontWeight.bold)),
+        const Text(
+          'Последние задания',
+          style: TextStyle(fontWeight: FontWeight.bold),
+        ),
         const SizedBox(height: 8),
         SizedBox(
           height: 120,
           child: ListView.builder(
             scrollDirection: Axis.horizontal,
             itemCount: _recentTasks.length,
-            itemBuilder: (_, i) =>
-                GestureDetector(
+            itemBuilder:
+                (_, i) => GestureDetector(
                   onTap: () => _onTaskTap(_recentTasks[i]),
                   child: Card(
                     child: Padding(
@@ -322,12 +380,13 @@ class _TaskScreenState extends State<TaskScreen> {
 
   Future<String> _getOrCreateChat(String orderId) async {
     final uid = FirebaseAuth.instance.currentUser!.uid;
-    final q = await FirebaseFirestore.instance
-        .collection('chats')
-        .where('order_id', isEqualTo: orderId)
-        .where('participants', arrayContains: uid)
-        .limit(1)
-        .get();
+    final q =
+        await FirebaseFirestore.instance
+            .collection('chats')
+            .where('order_id', isEqualTo: orderId)
+            .where('participants', arrayContains: uid)
+            .limit(1)
+            .get();
 
     if (q.docs.isNotEmpty) return q.docs.first.id;
 
