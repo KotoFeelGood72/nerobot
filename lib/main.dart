@@ -43,18 +43,33 @@ Future<void> main() async {
 
   if (!isBackgroundIsolate) {
     await FirebaseInitializer.initialize();
+    // Локальная разработка: Auth Emulator — без реальной SMS и без reCAPTCHA (нет network-request-failed).
+    // Запусти: firebase emulators:start --only auth
+    const bool _useAuthEmulator = false;
+    if (_useAuthEmulator) {
+      await FirebaseAuth.instance.useAuthEmulator('localhost', 9099);
+      debugPrint('🔧 Auth Emulator: localhost:9099');
+    }
   } else {
     debugPrint('Main skipped Firebase initialization because this is a background isolate. route=$initialRoute');
   }
 
   getIt.registerSingleton<AppRouter>(AppRouter());
 
-  // Activate App Check (debug provider for development)
-  try {
-    await FirebaseAppCheck.instance.activate(androidProvider: AndroidProvider.debug);
-    debugPrint("🛡 AppCheck activated");
-  } catch (e) {
-    debugPrint("❌ AppCheck error: $e");
+  // App Check: отключить для теста Phone Auth (network-request-failed). Если без него заработает — зарегистрируй debug-токен в Firebase Console → App Check → Manage debug tokens.
+  const bool _skipAppCheckForAuthTest = true; // верни false и зарегистрируй токен перед продакшеном
+  if (!_skipAppCheckForAuthTest) {
+    try {
+      await FirebaseAppCheck.instance.activate(
+        androidProvider: AndroidProvider.debug,
+        appleProvider: AppleProvider.debug,
+      );
+      debugPrint("🛡 AppCheck activated");
+    } catch (e) {
+      debugPrint("❌ AppCheck error: $e");
+    }
+  } else {
+    debugPrint("🛡 AppCheck skipped (auth test mode)");
   }
 
   FirebaseAuthConfig.configureForProduction();
@@ -105,9 +120,13 @@ void debugFirebaseInfo() {
   }
 }
 
-/// Debug: simple write/read to verify Firestore connectivity
+/// Debug: simple write/read to verify Firestore connectivity (только если пользователь уже залогинен)
 Future<void> testConnectFirestore() async {
   try {
+    if (FirebaseAuth.instance.currentUser == null) {
+      debugPrint('TEST FIRESTORE: skip (not signed in, rules require auth)');
+      return;
+    }
     final docRef = FirebaseFirestore.instance.collection('debug_connect').doc('ping');
     await docRef.set({'ts': FieldValue.serverTimestamp()});
     final snap = await docRef.get();
