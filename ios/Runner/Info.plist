@@ -37,6 +37,9 @@
 	<string>$(FLUTTER_BUILD_NUMBER)</string>
 	<key>FirebaseAppDelegateProxyEnabled</key>
 	<false/>
+	<!-- Экспорт: только стандартное шифрование (HTTPS), документация не требуется -->
+	<key>ITSAppUsesNonExemptEncryption</key>
+	<false/>
 	<!-- Разрешить сетевые запросы к Firebase/reCAPTCHA (для разработки; в продакшене можно ужесточить) -->
 	<key>NSAppTransportSecurity</key>
 	<dict>
