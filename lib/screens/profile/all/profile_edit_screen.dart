@@ -12,6 +12,7 @@ import 'package:nerobot/components/ui/Inputs.dart';
 import 'package:nerobot/constants/app_colors.dart';
 import 'package:nerobot/router/app_router.gr.dart';
 import 'package:nerobot/utils/clean_phone.dart';
+import 'package:nerobot/utils/city_coordinates.dart';
 
 @RoutePage()
 class ProfileEditScreen extends StatefulWidget {
@@ -239,15 +240,26 @@ class _ProfileEditScreenState extends State<ProfileEditScreen> {
 
     try {
       final cleanedPhone = CleanPhone.cleanPhoneNumber(phoneController.text);
-
-      await FirebaseFirestore.instance.collection('users').doc(userId).update({
+      
+      // Получаем координаты города
+      final cityCoords = CityCoordinates.getCityCoordinates(selectedCity);
+      
+      final updateData = <String, dynamic>{
         'firstName': firstNameController.text,
         'lastName': lastNameController.text,
         'phone': cleanedPhone,
         'city': selectedCity,
         'about': aboutMySelfController.text,
         'image_url': photoUrl ?? '',
-      });
+      };
+      
+      // Добавляем координаты города, если они найдены
+      if (cityCoords != null) {
+        updateData['city_lat'] = cityCoords.latitude;
+        updateData['city_lng'] = cityCoords.longitude;
+      }
+
+      await FirebaseFirestore.instance.collection('users').doc(userId).update(updateData);
 
       if (mounted) AutoRouter.of(context).replaceAll([TaskRoute()]);
     } finally {

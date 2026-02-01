@@ -43,7 +43,7 @@ class FirebaseTest {
   static void printFirebaseConfig() {
     debugPrint('🔧 Конфигурация Firebase:');
     debugPrint('Project ID: handy-35312');
-    debugPrint('Package: com.handywork.app');
+    debugPrint('Package: com.sprestay.handyman');
     debugPrint(
       'Debug SHA-1: C8:7C:BC:9C:C5:F4:72:2D:59:0C:3F:01:F7:93:DF:5C:33:DF:24:5D',
     );

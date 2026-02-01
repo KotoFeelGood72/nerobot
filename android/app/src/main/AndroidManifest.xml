@@ -1,21 +1,20 @@
-<manifest xmlns:android="http://schemas.android.com/apk/res/android">
+<manifest xmlns:android="http://schemas.android.com/apk/res/android"
+    package="com.sprestay.handyman">
 
-    <!-- Разрешения, уже были -->
+    <!-- Разрешения -->
     <uses-permission android:name="android.permission.ACCESS_FINE_LOCATION"/>
     <uses-permission android:name="android.permission.ACCESS_COARSE_LOCATION"/>
-    <uses-permission android:name="android.permission.INTERNET" />
-
-    <!-- Добавляем разрешения для FCM -->
-    <uses-permission android:name="com.google.android.c2dm.permission.RECEIVE"/>
+    <uses-permission android:name="android.permission.INTERNET"/>
     <uses-permission android:name="android.permission.WAKE_LOCK"/>
+    <uses-permission android:name="com.google.android.c2dm.permission.RECEIVE"/>
 
     <application
-        android:label="nerobot"
+        android:label="@string/app_name"
         android:name="${applicationName}"
         android:icon="@mipmap/ic_launcher">
 
         <activity
-            android:name="com.handywork.app.MainActivity"
+            android:name="com.sprestay.handyman.MainActivity"
             android:exported="true"
             android:launchMode="singleTop"
             android:taskAffinity=""
@@ -25,18 +24,19 @@
             android:windowSoftInputMode="adjustResize"
             android:showWhenLocked="true"
             android:turnScreenOn="true">
-            
+
             <!-- NormalTheme для Flutter -->
             <meta-data
                 android:name="io.flutter.embedding.android.NormalTheme"
                 android:resource="@style/NormalTheme" />
-            
+
+            <!-- Главный запуск -->
             <intent-filter>
                 <action android:name="android.intent.action.MAIN"/>
                 <category android:name="android.intent.category.LAUNCHER"/>
             </intent-filter>
-            
-            <!-- Intent filter для reCAPTCHA redirects -->
+
+            <!-- reCAPTCHA redirect -->
             <intent-filter android:autoVerify="true">
                 <action android:name="android.intent.action.VIEW" />
                 <category android:name="android.intent.category.DEFAULT" />
@@ -44,15 +44,16 @@
                 <data android:scheme="https"
                       android:host="handy-35312.firebaseapp.com" />
             </intent-filter>
-            
-            <!-- Intent filter для custom URL scheme -->
+
+            <!-- Custom scheme -->
             <intent-filter>
                 <action android:name="android.intent.action.VIEW" />
                 <category android:name="android.intent.category.DEFAULT" />
                 <category android:name="android.intent.category.BROWSABLE" />
                 <data android:scheme="nerobot" />
             </intent-filter>
-            
+
+            <!-- Push notification click -->
             <intent-filter>
                 <action android:name="FLUTTER_NOTIFICATION_CLICK" />
                 <category android:name="android.intent.category.DEFAULT" />
@@ -70,38 +71,35 @@
             </intent-filter>
         </receiver>
 
-        <!-- Канал по умолчанию для пуш-уведомлений -->
+        <!-- Канал уведомлений по умолчанию -->
         <meta-data
             android:name="com.google.firebase.messaging.default_notification_channel_id"
             android:value="high_importance_channel"/>
 
-        <!-- Настройки для Firebase Phone Auth и reCAPTCHA -->
+        <!-- Настройки Firebase Auth + reCAPTCHA -->
         <meta-data
             android:name="firebase_auth_web_api_key"
             android:value="AIzaSyAKezJnWvIKTFgmfnJ3WiE1X3i9mPhqJDI" />
-        
-        <!-- Принудительное использование нативной reCAPTCHA вместо WebView -->
+
         <meta-data
             android:name="com.google.firebase.auth.recaptcha_web_api_key"
             android:value="AIzaSyAKezJnWvIKTFgmfnJ3WiE1X3i9mPhqJDI" />
-        
-        <!-- Настройки reCAPTCHA для правильного redirect -->
+
         <meta-data
             android:name="com.google.firebase.auth.disable_webview_recaptcha"
             android:value="false" />
-        
-        <!-- Настройки для безопасного домена reCAPTCHA -->
+
         <meta-data
             android:name="com.google.firebase.auth.recaptcha_safe_domain"
             android:value="handy-35312.firebaseapp.com" />
 
-        <!-- Не удаляйте этот мета-дата — нужен для регистрации Flutter-плагинов -->
+        <!-- Не удалять: Flutter-плагины -->
         <meta-data
             android:name="flutterEmbedding"
             android:value="2" />
     </application>
 
-    <!-- Required для текстовых действий (Flutter ProcessTextPlugin) -->
+    <!-- Для ProcessTextPlugin -->
     <queries>
         <intent>
             <action android:name="android.intent.action.PROCESS_TEXT"/>

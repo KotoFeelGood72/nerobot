@@ -1,8 +1,10 @@
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/foundation.dart';
+import 'package:nerobot/utils/subscription_utils.dart';
 
 class PhoneAuthHelper {
-  static Future<void> verifyPhoneNumber({
+  /// Старт авторизации по номеру телефона
+  static Future<void> startPhoneSignIn({
     required String phoneNumber,
     required Function(PhoneAuthCredential) onVerificationCompleted,
     required Function(FirebaseAuthException) onVerificationFailed,
@@ -11,76 +13,42 @@ class PhoneAuthHelper {
     Duration timeout = const Duration(seconds: 60),
   }) async {
     try {
-      // Настройки для принудительного использования нативной reCAPTCHA
-      await FirebaseAuth.instance.setSettings(
-        appVerificationDisabledForTesting: false,
-        forceRecaptchaFlow: false,
-      );
-
       await FirebaseAuth.instance.verifyPhoneNumber(
         phoneNumber: phoneNumber,
         timeout: timeout,
-        verificationCompleted: onVerificationCompleted,
-        verificationFailed: onVerificationFailed,
-        codeSent: onCodeSent,
-        codeAutoRetrievalTimeout: onCodeAutoRetrievalTimeout,
-        // Принудительно используем нативную reCAPTCHA
-        forceResendingToken: null,
-        // Дополнительные параметры для правильной работы reCAPTCHA
-        multiFactorSession: null,
-        multiFactorInfo: null,
+        verificationCompleted: (PhoneAuthCredential credential) async {
+          // ⚡️ Пользователь автоматически вошёл (Android auto SMS)
+          final userCred =
+              await FirebaseAuth.instance.signInWithCredential(credential);
+          final uid = userCred.user?.uid;
+          debugPrint('✅ Автовход успешен. UID: $uid');
+
+          // 💥 Добавляем триал, если нет активной подписки
+          if (uid != null) {
+            await SubscriptionUtils.ensureFreeTrial(uid);
+          }
+
+          onVerificationCompleted(credential);
+        },
+        verificationFailed: (FirebaseAuthException e) {
+          debugPrint('❌ Ошибка верификации: ${e.code} — ${e.message}');
+          onVerificationFailed(e);
+        },
+        codeSent: (String verificationId, int? resendToken) {
+          debugPrint('📩 Код отправлен на номер $phoneNumber');
+          onCodeSent(verificationId, resendToken);
+        },
+        codeAutoRetrievalTimeout: (String verificationId) {
+          debugPrint('⌛️ Истёк таймаут автоматического получения кода');
+          onCodeAutoRetrievalTimeout(verificationId);
+        },
       );
     } catch (e) {
-      debugPrint('❌ Ошибка в PhoneAuthHelper: $e');
-      onVerificationFailed(
-        FirebaseAuthException(
-          code: 'unknown-error',
-          message: 'Неизвестная ошибка: $e',
-        ),
-      );
-    }
-  }
-
-  /// Альтернативный метод для случаев, когда WebView все равно открывается
-  static Future<bool> isNativeRecaptchaSupported() async {
-    try {
-      // Проверяем, поддерживается ли нативная reCAPTCHA
-      final auth = FirebaseAuth.instance;
-      // Если приложение правильно настроено, нативная reCAPTCHA должна работать
-      return true;
-    } catch (e) {
-      debugPrint('❌ Нативная reCAPTCHA не поддерживается: $e');
-      return false;
-    }
-  }
-
-  /// Метод для принудительного отключения WebView
-  static Future<void> disableWebViewRecaptcha() async {
-    try {
-      await FirebaseAuth.instance.setSettings(
-        appVerificationDisabledForTesting: false,
-        forceRecaptchaFlow: false,
-      );
-      debugPrint('✅ WebView reCAPTCHA отключена');
-    } catch (e) {
-      debugPrint('❌ Не удалось отключить WebView reCAPTCHA: $e');
-    }
-  }
-
-  /// Метод для настройки reCAPTCHA с правильными redirects
-  static Future<void> configureRecaptchaRedirects() async {
-    try {
-      // Настройки для правильной работы reCAPTCHA redirects
-      await FirebaseAuth.instance.setSettings(
-        appVerificationDisabledForTesting: false,
-        forceRecaptchaFlow: false,
-      );
-
-      debugPrint('✅ reCAPTCHA redirects настроены');
-      debugPrint('✅ Домен: handy-35312.firebaseapp.com');
-      debugPrint('✅ Package: com.handywork.app');
-    } catch (e) {
-      debugPrint('❌ Ошибка настройки reCAPTCHA redirects: $e');
+      debugPrint('❌ Ошибка в startPhoneSignIn: $e');
+      onVerificationFailed(FirebaseAuthException(
+        code: 'unknown-error',
+        message: e.toString(),
+      ));
     }
   }
 }

@@ -199,6 +199,16 @@ class _NewTaskCreateScreenState extends State<NewTaskCreateScreen> {
             : _selectedAddress;
 
     final user = FirebaseAuth.instance.currentUser;
+    String? userCity;
+
+    if (user != null) {
+      final userSnap = await FirebaseFirestore.instance
+          .collection('users')
+          .doc(user.uid)
+          .get();
+
+      userCity = userSnap.data()?['city'];
+    }
     final description = _descriptionController.text.trim();
 
     if (_paymentFor == null) {
@@ -254,8 +264,17 @@ class _NewTaskCreateScreenState extends State<NewTaskCreateScreen> {
 
     try {
       final data = draft.toFirestoreMap();
-      data["deadline"] = deadline.millisecondsSinceEpoch;
-      data["payment_for"] = _paymentFor;
+
+      data.addAll({
+      "active": true,
+      "deleted": false,
+      "status": "open",
+      "responses": [],
+      "created_date": DateTime.now().millisecondsSinceEpoch,
+      "deadline": deadline.millisecondsSinceEpoch,
+      "payment_for": _paymentFor,
+      "city": userCity, 
+});
 
       await FirebaseFirestore.instance.collection('orders').add(data);
 
