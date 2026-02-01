@@ -6,7 +6,12 @@ class UserService {
   static final _db = FirebaseFirestore.instance;
 
   /// Возвращает true если создан/существует
-  static Future<bool> createUserIfNotExists(User user, String role) async {
+  /// [phoneOverride] — для dev-входа без SMS (анонимный пользователь с «виртуальным» номером).
+  static Future<bool> createUserIfNotExists(
+    User user,
+    String role, {
+    String? phoneOverride,
+  }) async {
     try {
       final uid = user.uid.trim();
       final ref = _db.collection('users').doc(uid);
@@ -14,10 +19,11 @@ class UserService {
       // Попробуем получить документ; используем retry/backoff при временных ошибках на уровне сети
       final doc = await ref.get();
 
+      final phone = phoneOverride?.trim() ?? user.phoneNumber?.trim();
       if (!doc.exists) {
         await ref.set({
           'userId': uid, // обязательно, если правила требуют наличия userId
-          'phone': user.phoneNumber?.trim(),
+          'phone': phone,
           'type': role,
           'created_date': FieldValue.serverTimestamp(),
           'subscription_status': false,

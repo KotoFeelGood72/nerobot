@@ -1,6 +1,5 @@
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/foundation.dart';
-import 'package:nerobot/utils/subscription_utils.dart';
 
 class PhoneAuthHelper {
   /// Старт авторизации по номеру телефона
@@ -17,17 +16,8 @@ class PhoneAuthHelper {
         phoneNumber: phoneNumber,
         timeout: timeout,
         verificationCompleted: (PhoneAuthCredential credential) async {
-          // ⚡️ Пользователь автоматически вошёл (Android auto SMS)
-          final userCred =
-              await FirebaseAuth.instance.signInWithCredential(credential);
-          final uid = userCred.user?.uid;
-          debugPrint('✅ Автовход успешен. UID: $uid');
-
-          // 💥 Добавляем триал, если нет активной подписки
-          if (uid != null) {
-            await SubscriptionUtils.ensureFreeTrial(uid);
-          }
-
+          // ⚡️ Android: авто-подтверждение SMS. По доке один раз signIn — в колбэке экрана.
+          debugPrint('✅ verificationCompleted (Android auto SMS)');
           onVerificationCompleted(credential);
         },
         verificationFailed: (FirebaseAuthException e) {

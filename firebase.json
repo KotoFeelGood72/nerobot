@@ -2,6 +2,18 @@
   "firestore": {
     "rules": "firestore.rules"
   },
+  "emulators": {
+    "auth": {
+      "port": 9099
+    },
+    "firestore": {
+      "port": 8080
+    },
+    "ui": {
+      "enabled": true,
+      "port": 4000
+    }
+  },
   "flutter": {
     "platforms": {
       "android": {
@@ -11,11 +23,19 @@
           "fileOutput": "android/app/google-services.json"
         }
       },
+      "ios": {
+        "default": {
+          "projectId": "handy-35312",
+          "appId": "1:408622761678:ios:ef7df3842115c64e19f29f",
+          "fileOutput": "ios/Runner/GoogleService-Info.plist"
+        }
+      },
       "dart": {
         "lib/firebase_options.dart": {
           "projectId": "handy-35312",
           "configurations": {
-            "android": "1:408622761678:android:9d16dbf09827eadc19f29f"
+            "android": "1:408622761678:android:9d16dbf09827eadc19f29f",
+            "ios": "1:408622761678:ios:ef7df3842115c64e19f29f"
           }
         }
       }

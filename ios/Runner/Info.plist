@@ -61,6 +61,11 @@
 		<string>location</string>
 		<string>push-to-talk</string>
 	</array>
+	<!-- Обязательно при UIBackgroundModes "processing" (BGTaskScheduler) -->
+	<key>BGTaskSchedulerPermittedIdentifiers</key>
+	<array>
+		<string>com.nerobot.app.nerobot.refresh</string>
+	</array>
 	<key>UILaunchStoryboardName</key>
 	<string>LaunchScreen</string>
 	<key>UIMainStoryboardFile</key>

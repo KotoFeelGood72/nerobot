@@ -3,14 +3,12 @@ import 'package:auto_route/auto_route.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_otp_text_field/flutter_otp_text_field.dart';
 import 'package:firebase_auth/firebase_auth.dart';
-import 'package:cloud_firestore/cloud_firestore.dart';
 
 import 'package:nerobot/components/ui/Btn.dart';
 import 'package:nerobot/constants/app_colors.dart';
 import 'package:nerobot/layouts/empty_layout.dart';
 import 'package:nerobot/router/app_router.gr.dart';
 
-import 'package:nerobot/utils/auth_limits.dart';
 import 'package:nerobot/utils/subscription_utils.dart';
 import 'package:nerobot/services/user_service.dart';
 
@@ -18,11 +16,17 @@ import 'package:nerobot/services/user_service.dart';
 class ConfirmScreen extends StatefulWidget {
   final String verificationId;
   final String role;
+  /// Номер, на который отправили код (для повторной отправки)
+  final String phoneNumber;
+  /// Токен для force resend (док: forceResendingToken). На iOS всегда null.
+  final int? resendToken;
 
   const ConfirmScreen({
     super.key,
     required this.verificationId,
     required this.role,
+    required this.phoneNumber,
+    this.resendToken,
   });
 
   @override
@@ -35,10 +39,16 @@ class _ConfirmScreenState extends State<ConfirmScreen> {
   late Timer _timer;
   bool canResend = false;
   int resendCount = 0;
+  /// Текущий verificationId (обновляется при resend).
+  late String _verificationId;
+  /// Токен для принудительной повторной отправки (по доке forceResendingToken).
+  int? _resendToken;
 
   @override
   void initState() {
     super.initState();
+    _verificationId = widget.verificationId;
+    _resendToken = widget.resendToken;
     _startTimer();
   }
 
@@ -56,7 +66,7 @@ class _ConfirmScreenState extends State<ConfirmScreen> {
   Future<void> _verify(String code) async {
     try {
       final cred = PhoneAuthProvider.credential(
-        verificationId: widget.verificationId,
+        verificationId: _verificationId,
         smsCode: code,
       );
 
@@ -95,28 +105,34 @@ class _ConfirmScreenState extends State<ConfirmScreen> {
   Future<void> _resend() async {
     if (!canResend) return;
 
-    final currentUser = FirebaseAuth.instance.currentUser;
-    final phone = currentUser?.phoneNumber;
-
-    if (phone == null) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Телефон недоступен')),
-      );
-      return;
-    }
+    _timer.cancel();
+    setState(() {
+      canResend = false;
+      remainingSeconds = 60;
+    });
+    _startTimer();
 
     await FirebaseAuth.instance.verifyPhoneNumber(
-      phoneNumber: phone,
+      phoneNumber: widget.phoneNumber,
+      forceResendingToken: _resendToken,
       timeout: const Duration(seconds: 60),
-      verificationCompleted: (c) {},
-      verificationFailed: (e) {},
-      codeSent: (id, _) {
+      verificationCompleted: (_) {},
+      verificationFailed: (e) {
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(content: Text(e.message ?? 'Ошибка отправки кода')),
+          );
+        }
+      },
+      codeSent: (String newVerificationId, int? newResendToken) {
+        if (!mounted) return;
         setState(() {
+          _verificationId = newVerificationId;
+          _resendToken = newResendToken;
           resendCount++;
           remainingSeconds = 60;
           canResend = false;
         });
-        _startTimer();
       },
       codeAutoRetrievalTimeout: (_) {},
     );

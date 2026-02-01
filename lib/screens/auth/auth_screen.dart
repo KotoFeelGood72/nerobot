@@ -8,6 +8,7 @@ import 'package:firebase_messaging/firebase_messaging.dart';
 import 'package:nerobot/components/ui/Btn.dart';
 import 'package:nerobot/components/ui/Inputs.dart';
 import 'package:nerobot/constants/app_colors.dart';
+import 'package:nerobot/constants/env.dart';
 import 'package:nerobot/layouts/empty_layout.dart';
 import 'package:nerobot/router/app_router.gr.dart';
 import 'package:nerobot/utils/clean_phone.dart';
@@ -45,11 +46,58 @@ class _AuthScreenState extends State<AuthScreen> {
     }, SetOptions(merge: true));
   }
 
-  /// Отправляем код
+  /// Отправляем код (в dev — любой номер пускаем без SMS)
   Future<void> _requestCode() async {
     final phone = CleanPhone.cleanPhoneNumber(_controller.text);
 
     setState(() => isLoading = true);
+
+    if (devAuthBypass) {
+      try {
+        UserCredential? userCred;
+        const maxAttempts = 3;
+        for (var attempt = 1; attempt <= maxAttempts; attempt++) {
+          try {
+            userCred = await FirebaseAuth.instance.signInAnonymously();
+            break;
+          } catch (authErr) {
+            // На iOS ошибка может приходить не как FirebaseAuthException
+            final isNetworkError = authErr is FirebaseAuthException
+                ? authErr.code == 'network-request-failed'
+                : authErr.toString().contains('network-request-failed');
+            if (isNetworkError && attempt < maxAttempts) {
+              debugPrint('⚠️ signInAnonymously attempt $attempt failed (network), retry in 2s...');
+              await Future<void>.delayed(const Duration(seconds: 2));
+              continue;
+            }
+            rethrow;
+          }
+        }
+        final user = userCred?.user;
+        if (user == null) throw Exception("User is null");
+        await UserService.createUserIfNotExists(user, widget.role, phoneOverride: phone);
+        await SubscriptionUtils.ensureFreeTrial(user.uid);
+        await _saveDeviceToken();
+        if (!mounted) return;
+        AutoRouter.of(context).replaceAll([const TaskRoute()]);
+      } catch (e, st) {
+        debugPrint('❌ Dev auth bypass error: $e\n$st');
+        if (mounted) {
+          final isNetworkError = (e is FirebaseAuthException &&
+                  e.code == 'network-request-failed') ||
+              e.toString().contains('network-request-failed');
+          final String message = isNetworkError
+              ? 'Нет связи с Firebase. Попробуйте мобильный интернет вместо Wi‑Fi или повторите позже.'
+              : 'Ошибка входа: $e';
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(content: Text(message), duration: const Duration(seconds: 5)),
+          );
+        }
+      } finally {
+        if (mounted) setState(() => isLoading = false);
+      }
+      return;
+    }
 
     await PhoneAuthHelper.startPhoneSignIn(
       phoneNumber: phone,
@@ -86,7 +134,7 @@ class _AuthScreenState extends State<AuthScreen> {
         setState(() => isLoading = false);
       },
 
-      onCodeSent: (id, _) {
+      onCodeSent: (id, resendToken) {
         setState(() {
           verificationId = id;
           isLoading = false;
@@ -96,6 +144,8 @@ class _AuthScreenState extends State<AuthScreen> {
           ConfirmRoute(
             verificationId: id,
             role: widget.role,
+            phoneNumber: phone,
+            resendToken: resendToken,
           ),
         );
       },

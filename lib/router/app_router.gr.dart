@@ -156,6 +156,8 @@ class ConfirmRoute extends _i26.PageRouteInfo<ConfirmRouteArgs> {
     _i27.Key? key,
     required String verificationId,
     required String role,
+    required String phoneNumber,
+    int? resendToken,
     List<_i26.PageRouteInfo>? children,
   }) : super(
          ConfirmRoute.name,
@@ -163,6 +165,8 @@ class ConfirmRoute extends _i26.PageRouteInfo<ConfirmRouteArgs> {
            key: key,
            verificationId: verificationId,
            role: role,
+           phoneNumber: phoneNumber,
+           resendToken: resendToken,
          ),
          initialChildren: children,
        );
@@ -177,6 +181,8 @@ class ConfirmRoute extends _i26.PageRouteInfo<ConfirmRouteArgs> {
         key: args.key,
         verificationId: args.verificationId,
         role: args.role,
+        phoneNumber: args.phoneNumber,
+        resendToken: args.resendToken,
       );
     },
   );
@@ -187,6 +193,8 @@ class ConfirmRouteArgs {
     this.key,
     required this.verificationId,
     required this.role,
+    required this.phoneNumber,
+    this.resendToken,
   });
 
   final _i27.Key? key;
@@ -195,9 +203,13 @@ class ConfirmRouteArgs {
 
   final String role;
 
+  final String phoneNumber;
+
+  final int? resendToken;
+
   @override
   String toString() {
-    return 'ConfirmRouteArgs{key: $key, verificationId: $verificationId, role: $role}';
+    return 'ConfirmRouteArgs{key: $key, verificationId: $verificationId, role: $role, phoneNumber: $phoneNumber, resendToken: $resendToken}';
   }
 
   @override
@@ -206,11 +218,18 @@ class ConfirmRouteArgs {
     if (other is! ConfirmRouteArgs) return false;
     return key == other.key &&
         verificationId == other.verificationId &&
-        role == other.role;
+        role == other.role &&
+        phoneNumber == other.phoneNumber &&
+        resendToken == other.resendToken;
   }
 
   @override
-  int get hashCode => key.hashCode ^ verificationId.hashCode ^ role.hashCode;
+  int get hashCode =>
+      key.hashCode ^
+      verificationId.hashCode ^
+      role.hashCode ^
+      phoneNumber.hashCode ^
+      resendToken.hashCode;
 }
 
 /// generated route for

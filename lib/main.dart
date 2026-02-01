@@ -1,4 +1,5 @@
 import 'dart:ui' show PlatformDispatcher;
+import 'package:flutter/foundation.dart' show kDebugMode;
 import 'package:flutter/material.dart';
 import 'package:get_it/get_it.dart';
 import 'package:intl/date_symbol_data_local.dart';
@@ -16,6 +17,7 @@ import 'services/user_service.dart';
 import 'utils/subscription_utils.dart';
 import 'router/app_router.dart';
 import 'constants/app_colors.dart';
+import 'constants/env.dart';
 import 'themes/text_themes.dart';
 import 'firebase_options.dart';
 
@@ -43,12 +45,18 @@ Future<void> main() async {
 
   if (!isBackgroundIsolate) {
     await FirebaseInitializer.initialize();
-    // Локальная разработка: Auth Emulator — без реальной SMS и без reCAPTCHA (нет network-request-failed).
-    // Запусти: firebase emulators:start --only auth
-    const bool _useAuthEmulator = false;
-    if (_useAuthEmulator) {
-      await FirebaseAuth.instance.useAuthEmulator('localhost', 9099);
-      debugPrint('🔧 Auth Emulator: localhost:9099');
+    // Эмуляторы: симулятор — localhost; физическое устройство — IP Mac (телефон и Mac в одной Wi‑Fi).
+    // Симулятор: flutter run --dart-define=USE_EMULATORS=true
+    // Устройство: flutter run --dart-define=USE_EMULATORS=true --dart-define=EMULATOR_HOST=192.168.x.x
+    // На Mac: firebase emulators:start --only auth,firestore --host 0.0.0.0
+    const bool _useEmulators = bool.fromEnvironment('USE_EMULATORS', defaultValue: false);
+    const String _emulatorHost = String.fromEnvironment('EMULATOR_HOST', defaultValue: 'localhost');
+    if (_useEmulators) {
+      await FirebaseAuth.instance.useAuthEmulator(_emulatorHost, 9099);
+      FirebaseFirestore.instance.useFirestoreEmulator(_emulatorHost, 8080);
+      debugPrint('🔧 Emulators: Auth + Firestore at $_emulatorHost:9099 / $_emulatorHost:8080');
+    } else {
+      debugPrint('🔧 Real Firebase (device/production)');
     }
   } else {
     debugPrint('Main skipped Firebase initialization because this is a background isolate. route=$initialRoute');
@@ -72,7 +80,13 @@ Future<void> main() async {
     debugPrint("🛡 AppCheck skipped (auth test mode)");
   }
 
-  FirebaseAuthConfig.configureForProduction();
+  if (const bool.fromEnvironment('FORCE_PHONE_AUTH_TESTING', defaultValue: false) ||
+      forcePhoneAuthTestingMode) {
+    FirebaseAuthConfig.configureForTesting();
+    if (kDebugMode) debugPrint('📱 Phone Auth: testing mode (только тестовые номера из Firebase Console)');
+  } else {
+    FirebaseAuthConfig.configureForProduction();
+  }
   await initializeDateFormatting('ru_RU');
 
   FirebaseMessaging.onBackgroundMessage(_firebaseMessagingBackgroundHandler);
