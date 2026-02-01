@@ -172,6 +172,8 @@ flutter build ipa
 - При одобрении статус станет **Ready for Sale** — приложение появится в App Store (или в выбранную дату, если настроил отложенный релиз).
 - При отклонении придёт письмо с причиной; исправь и отправь новую версию/билд.
 
+---
+
 ## Getting Started
 
 This project is a starting point for a Flutter application.

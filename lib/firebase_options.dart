@@ -56,8 +56,8 @@ class DefaultFirebaseOptions {
     messagingSenderId: '408622761678',
     projectId: 'handy-35312',
     storageBucket: 'handy-35312.firebasestorage.app',
+    databaseURL: 'https://handy-35312-default-rtdb.europe-west4.firebasedatabase.app',
   );
-
   static const FirebaseOptions ios = FirebaseOptions(
     apiKey: 'AIzaSyDY9akoIpjT0KmIiuVREmeeCCtVlhNd60o',
     appId: '1:408622761678:ios:ef7df3842115c64e19f29f',
@@ -66,5 +66,4 @@ class DefaultFirebaseOptions {
     storageBucket: 'handy-35312.firebasestorage.app',
     iosBundleId: 'com.nerobot.app.nerobot',
   );
-
 }

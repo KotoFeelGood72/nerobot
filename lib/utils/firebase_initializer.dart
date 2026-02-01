@@ -2,7 +2,7 @@ import 'package:flutter/widgets.dart';
 import 'package:firebase_core/firebase_core.dart';
 import 'package:flutter/foundation.dart';
 
-import '../firebase_options.dart'; // проверьте путь: lib/firebase_options.dart
+import '../firebase_options.dart';
 
 class FirebaseInitializer {
   static Future<void>? _initFuture;
@@ -20,7 +20,6 @@ class FirebaseInitializer {
   }
 
   static Future<void> _doInitialize() async {
-    // Небольшая двойная проверка перед реальной инициализацией.
     if (Firebase.apps.isNotEmpty) {
       _initialized = true;
       if (kDebugMode) debugPrint('FirebaseInitializer: already initialized (existing apps).');
@@ -40,7 +39,6 @@ class FirebaseInitializer {
       return;
     } on FirebaseException catch (e) {
       final msg = e.message ?? e.toString();
-      // Тихо игнорируем дубликат — не печатаем весь стек.
       if (e.code == 'duplicate-app' || msg.contains('already exists')) {
         try {
           Firebase.app();
@@ -51,12 +49,10 @@ class FirebaseInitializer {
         if (kDebugMode) debugPrint('FirebaseInitializer: duplicate init ignored');
         return;
       }
-      // Для прочих ошибок пробрасываем дальше
       rethrow;
     } catch (e) {
       rethrow;
     } finally {
-      // Очистим _initFuture, чтобы повторные (после ошибки) попытки могли заново инициировать
       _initFuture = null;
     }
   }
