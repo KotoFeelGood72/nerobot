@@ -13,12 +13,16 @@
 		<dict>
 			<key>CFBundleTypeName</key>
 			<string>MKDirectionsRequest</string>
+			<key>LSHandlerRank</key>
+			<string>Alternate</string>
 			<key>LSItemContentTypes</key>
 			<array>
 				<string>com.apple.maps.directionsrequest</string>
 			</array>
 		</dict>
 	</array>
+	<key>LSSupportsOpeningDocumentsInPlace</key>
+	<true/>
 	<key>CFBundleExecutable</key>
 	<string>$(EXECUTABLE_NAME)</string>
 	<key>CFBundleIdentifier</key>
@@ -52,8 +56,10 @@
 	<array>
 		<string>MKDirectionsModeOther</string>
 	</array>
-	<key>NSUserNotificationUsageDescription</key>
-	<string>Нужно разрешение для отображения пуш-уведомлений.</string>
+	<key>NSLocationWhenInUseUsageDescription</key>
+	<string>Геолокация нужна для выбора адреса задания на карте и фильтрации заданий по вашему району.</string>
+	<key>NSLocationAlwaysAndWhenInUseUsageDescription</key>
+	<string>Геолокация нужна для выбора адреса задания на карте и фильтрации заданий по вашему району.</string>
 	<key>UIApplicationSupportsIndirectInputEvents</key>
 	<true/>
 	<key>UIBackgroundModes</key>
@@ -62,7 +68,6 @@
 		<string>processing</string>
 		<string>fetch</string>
 		<string>location</string>
-		<string>push-to-talk</string>
 	</array>
 	<!-- Обязательно при UIBackgroundModes "processing" (BGTaskScheduler) -->
 	<key>BGTaskSchedulerPermittedIdentifiers</key>

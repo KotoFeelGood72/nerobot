@@ -8,7 +8,6 @@ import 'package:nerobot/components/bar/bottom_nav_bar.dart';
 import 'package:nerobot/components/list/task_list.dart';
 import 'package:nerobot/components/ui/task_filters.dart';
 import 'package:nerobot/components/placeholder/task_empty.dart';
-import 'package:nerobot/constants/app_colors.dart';
 import 'package:nerobot/router/app_router.gr.dart';
 import 'package:nerobot/utils/task_loader.dart';
 import 'package:nerobot/utils/subscription_utils.dart';
@@ -322,7 +321,7 @@ class _TaskScreenState extends State<TaskScreen> {
           ),
         ),
       ),
-      bottomNavigationBar: const BottomNavBar(),
+      bottomNavigationBar: BottomNavBar(showCreateButton: role != 'worker'),
     );
   }
 

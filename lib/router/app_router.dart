@@ -100,6 +100,16 @@ class AppRouter extends RootStackRouter {
       guards: [_authGuard],
     ),
     AutoRoute(
+      page: ProfileTermsRoute.page,
+      path: '/profile/terms',
+      guards: [_authGuard],
+    ),
+    AutoRoute(
+      page: ProfilePrivacyRoute.page,
+      path: '/profile/privacy',
+      guards: [_authGuard],
+    ),
+    AutoRoute(
       page: ProfileNoteRoute.page,
       path: '/profile/notifications',
       guards: [_authGuard],
@@ -112,12 +122,6 @@ class AppRouter extends RootStackRouter {
     AutoRoute(
       page: ProfileUserDataRoute.page,
       path: '/profile/user',
-      guards: [_authGuard],
-    ),
-    AutoRoute(page: VacansyRoute.page, path: '/vacancy', guards: [_authGuard]),
-    AutoRoute(
-      page: VacansyDetailRoute.page,
-      path: '/vacancy/:id',
       guards: [_authGuard],
     ),
     AutoRoute(page: ProfileRoute.page, path: '/profile', guards: [_authGuard]),

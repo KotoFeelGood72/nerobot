@@ -3,7 +3,7 @@ import 'package:flutter/material.dart';
 import 'package:nerobot/components/ui/Btn.dart';
 import 'package:nerobot/components/ui/Divider.dart';
 import 'package:nerobot/constants/app_colors.dart';
-import 'package:nerobot/router/app_router.gr.dart';
+import 'package:url_launcher/url_launcher.dart';
 
 @RoutePage()
 class ProfileHelpScreen extends StatelessWidget {
@@ -63,10 +63,26 @@ class ProfileHelpScreen extends StatelessWidget {
                       text: 'Написать',
                       theme: 'light',
                       textColor: AppColors.violet,
-                      onPressed:
-                          () => AutoRouter.of(
-                            context,
-                          ).push(ProfileFeedbackRoute()),
+                      onPressed: () async {
+                        // Сначала пробуем открыть через нативную схему Telegram
+                        final tgUrl = Uri.parse('tg://resolve?domain=nickelodium');
+                        final webUrl = Uri.parse('https://t.me/nickelodium');
+                        
+                        try {
+                          if (await canLaunchUrl(tgUrl)) {
+                            await launchUrl(tgUrl, mode: LaunchMode.externalApplication);
+                          } else if (await canLaunchUrl(webUrl)) {
+                            await launchUrl(webUrl, mode: LaunchMode.externalApplication);
+                          } else {
+                            throw Exception('Cannot launch URL');
+                          }
+                        } catch (e) {
+                          if (!context.mounted) return;
+                          ScaffoldMessenger.of(context).showSnackBar(
+                            const SnackBar(content: Text('Не удалось открыть Telegram. Установите Telegram или откройте https://t.me/nickelodium в браузере')),
+                          );
+                        }
+                      },
                     ),
                   ),
                   const Square(height: 42),

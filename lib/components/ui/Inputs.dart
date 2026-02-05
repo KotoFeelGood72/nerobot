@@ -32,7 +32,7 @@ class Inputs extends StatelessWidget {
     this.fieldType = 'text',
     this.label,
     this.required = false,
-    this.padding = const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
+    this.padding = const EdgeInsets.symmetric(horizontal: 12, vertical: 2),
     this.maxLength,
     this.isMultiline = false,
     this.onChanged, // Добавляем onChanged
@@ -145,6 +145,8 @@ class Inputs extends StatelessWidget {
                       fontSize: fontSize ?? 14,
                     ),
                     border: InputBorder.none,
+                    isDense: true,
+                    contentPadding: const EdgeInsets.symmetric(vertical: 8),
                   ),
                   onChanged: onChanged, // Вызываем переданную функцию
                 ),

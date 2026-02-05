@@ -6,6 +6,8 @@ import 'package:package_info_plus/package_info_plus.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:url_launcher/url_launcher.dart';
+import 'package:nerobot/router/app_router.gr.dart';
 
 @RoutePage()
 class ProfileAppScreen extends StatefulWidget {
@@ -117,8 +119,25 @@ class _ProfileAppScreenState extends State<ProfileAppScreen> {
                       size: 10,
                       color: AppColors.gray,
                     ),
-                    onTap: () {
-                      // TODO: Логика для "Напишите нам"
+                    onTap: () async {
+                      // Сначала пробуем открыть через нативную схему Telegram
+                      final tgUrl = Uri.parse('tg://resolve?domain=nickelodium');
+                      final webUrl = Uri.parse('https://t.me/nickelodium');
+                      
+                      try {
+                        if (await canLaunchUrl(tgUrl)) {
+                          await launchUrl(tgUrl, mode: LaunchMode.externalApplication);
+                        } else if (await canLaunchUrl(webUrl)) {
+                          await launchUrl(webUrl, mode: LaunchMode.externalApplication);
+                        } else {
+                          throw Exception('Cannot launch URL');
+                        }
+                      } catch (e) {
+                        if (!context.mounted) return;
+                        ScaffoldMessenger.of(context).showSnackBar(
+                          const SnackBar(content: Text('Не удалось открыть Telegram. Установите Telegram или откройте https://t.me/nickelodium в браузере')),
+                        );
+                      }
                     },
                   ),
                   CustomListTile(
@@ -149,7 +168,7 @@ class _ProfileAppScreenState extends State<ProfileAppScreen> {
                       color: AppColors.gray,
                     ),
                     onTap: () {
-                      // TODO: Логика для "Правила сервиса"
+                      AutoRouter.of(context).push(const ProfileTermsRoute());
                     },
                   ),
                   CustomListTile(
@@ -160,7 +179,7 @@ class _ProfileAppScreenState extends State<ProfileAppScreen> {
                       color: AppColors.gray,
                     ),
                     onTap: () {
-                      // TODO: Логика для "Политика конфиденциальности"
+                      AutoRouter.of(context).push(const ProfilePrivacyRoute());
                     },
                   ),
                   CustomListTile(
@@ -181,18 +200,6 @@ class _ProfileAppScreenState extends State<ProfileAppScreen> {
               child: Column(
                 children: [
                   CustomListTile(
-                    title: 'ВКонтакте',
-                    leadingAsset: 'assets/images/vk.png',
-                    icon: const IconWidget(
-                      iconName: 'right',
-                      size: 10,
-                      color: AppColors.gray,
-                    ),
-                    onTap: () {
-                      // TODO: Логика для "ВКонтакте"
-                    },
-                  ),
-                  CustomListTile(
                     title: 'Telegram',
                     leadingAsset: 'assets/images/tg.png',
                     icon: const IconWidget(
@@ -200,8 +207,25 @@ class _ProfileAppScreenState extends State<ProfileAppScreen> {
                       size: 10,
                       color: AppColors.gray,
                     ),
-                    onTap: () {
-                      // TODO: Логика для "Telegram"
+                    onTap: () async {
+                      // Сначала пробуем открыть через нативную схему Telegram
+                      final tgUrl = Uri.parse('tg://resolve?domain=nickelodium');
+                      final webUrl = Uri.parse('https://t.me/nickelodium');
+                      
+                      try {
+                        if (await canLaunchUrl(tgUrl)) {
+                          await launchUrl(tgUrl, mode: LaunchMode.externalApplication);
+                        } else if (await canLaunchUrl(webUrl)) {
+                          await launchUrl(webUrl, mode: LaunchMode.externalApplication);
+                        } else {
+                          throw Exception('Cannot launch URL');
+                        }
+                      } catch (e) {
+                        if (!context.mounted) return;
+                        ScaffoldMessenger.of(context).showSnackBar(
+                          const SnackBar(content: Text('Не удалось открыть Telegram. Установите Telegram или откройте https://t.me/nickelodium в браузере')),
+                        );
+                      }
                     },
                   ),
                 ],

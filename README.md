@@ -4,6 +4,28 @@ A new Flutter project.
 
 ## Деплой в App Store (пошагово)
 
+### Требование Apple: Xcode 26 и iOS SDK 26 (с 28 апреля 2026)
+
+С **28 апреля 2026** все приложения для iOS должны собираться с **iOS SDK 26** (входит в **Xcode 26**). Иначе при загрузке появится ошибка **ITMS-90725**.
+
+**Что сделать:**
+
+1. Установи **Xcode 26** из [Mac App Store](https://apps.apple.com/app/xcode/id497799835) или [developer.apple.com](https://developer.apple.com/download/applications/) (последняя стабильная или бета).
+2. Сделай Xcode 26 активным:
+   ```bash
+   sudo xcode-select -s /Applications/Xcode.app/Contents/Developer
+   ```
+   Если Xcode 26 установлен под другим именем (например `Xcode-26-beta.app`), укажи его путь.
+3. Пересобери приложение:
+   ```bash
+   flutter clean
+   cd ios && pod install && cd ..
+   flutter build ipa
+   ```
+4. Загрузи новый `.ipa` в App Store Connect (версию или build-номер увеличь в `pubspec.yaml` или в Xcode).
+
+---
+
 ### Шаг 1. Apple Developer Program
 
 - Зайди на [developer.apple.com](https://developer.apple.com).

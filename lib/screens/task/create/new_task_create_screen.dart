@@ -95,7 +95,7 @@ class _NewTaskCreateScreenState extends State<NewTaskCreateScreen> {
 
   Widget _addressModeChip({required bool active, required String label}) {
     return Container(
-      padding: const EdgeInsets.symmetric(vertical: 10),
+      padding: const EdgeInsets.symmetric(vertical: 6),
       decoration: BoxDecoration(
         color: active ? AppColors.white : Colors.transparent,
         borderRadius: BorderRadius.circular(30),
@@ -350,7 +350,7 @@ class _NewTaskCreateScreenState extends State<NewTaskCreateScreen> {
                 ),
                 const SizedBox(height: 8),
                 Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 12),
+                  padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
                   decoration: BoxDecoration(
                     color: AppColors.ulight,
                     borderRadius: BorderRadius.circular(8),
@@ -417,7 +417,7 @@ class _NewTaskCreateScreenState extends State<NewTaskCreateScreen> {
                   child: GestureDetector(
                     onTap: _pickDeadline,
                     child: Container(
-                      padding: const EdgeInsets.all(16),
+                      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
                       decoration: BoxDecoration(
                         color: AppColors.ulight,
                         borderRadius: BorderRadius.circular(8),
@@ -518,7 +518,7 @@ class _NewTaskCreateScreenState extends State<NewTaskCreateScreen> {
                       GestureDetector(
                         onTap: _openLocationPicker,
                         child: Container(
-                          padding: const EdgeInsets.all(16),
+                          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
                           decoration: BoxDecoration(
                             color: AppColors.ulight,
                             borderRadius: BorderRadius.circular(8),
@@ -570,6 +570,7 @@ class _NewTaskCreateScreenState extends State<NewTaskCreateScreen> {
                   child: TextField(
                     controller: _descriptionController,
                     maxLines: null,
+                    minLines: 3,
                     maxLength: 300,
                     keyboardType: TextInputType.multiline,
                     decoration: const InputDecoration(
@@ -578,6 +579,8 @@ class _NewTaskCreateScreenState extends State<NewTaskCreateScreen> {
                       hintStyle: TextStyle(color: AppColors.gray),
                       border: OutlineInputBorder(),
                       counterText: '',
+                      isDense: true,
+                      contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
                     ),
                   ),
                 ),
