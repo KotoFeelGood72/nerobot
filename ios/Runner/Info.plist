@@ -54,7 +54,6 @@
 		<string>remote-notification</string>
 		<string>processing</string>
 		<string>fetch</string>
-		<string>location</string>
 	</array>
 	<!-- Обязательно при UIBackgroundModes "processing" (BGTaskScheduler) -->
 	<key>BGTaskSchedulerPermittedIdentifiers</key>
