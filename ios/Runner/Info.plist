@@ -27,7 +27,7 @@
 	<key>CFBundleVersion</key>
 	<string>$(FLUTTER_BUILD_NUMBER)</string>
 	<key>FirebaseAppDelegateProxyEnabled</key>
-	<false/>
+	<true/>
 	<!-- Экспорт: только стандартное шифрование (HTTPS), документация не требуется -->
 	<key>ITSAppUsesNonExemptEncryption</key>
 	<false/>
