@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_masked_text2/flutter_masked_text2.dart';
+import 'package:nerobot/components/ui/app_form_field.dart';
 import 'package:nerobot/constants/app_colors.dart';
 
 class Inputs extends StatelessWidget {
@@ -32,10 +33,10 @@ class Inputs extends StatelessWidget {
     this.fieldType = 'text',
     this.label,
     this.required = false,
-    this.padding = const EdgeInsets.symmetric(horizontal: 12, vertical: 2),
+    this.padding = AppFormMetrics.controlPadding,
     this.maxLength,
     this.isMultiline = false,
-    this.onChanged, // Добавляем onChanged
+    this.onChanged,
     this.fontSize,
   });
 
@@ -101,10 +102,12 @@ class Inputs extends StatelessWidget {
             ),
           ),
         Container(
-          padding: padding, // Используем переданный padding
+          height: isMultiline ? null : AppFormMetrics.controlHeight,
+          padding: padding,
+          alignment: isMultiline ? Alignment.topLeft : Alignment.center,
           decoration: BoxDecoration(
             color: appliedBackgroundColor,
-            borderRadius: BorderRadius.circular(8),
+            borderRadius: BorderRadius.circular(AppFormMetrics.radius),
             border:
                 showErrorMessage
                     ? Border.all(color: AppColors.red)
@@ -112,7 +115,9 @@ class Inputs extends StatelessWidget {
           ),
           child: Row(
             crossAxisAlignment:
-                CrossAxisAlignment.start, // Для многострочного ввода
+                isMultiline
+                    ? CrossAxisAlignment.start
+                    : CrossAxisAlignment.center,
             children: [
               Expanded(
                 child: TextField(
@@ -121,34 +126,41 @@ class Inputs extends StatelessWidget {
                       isMultiline
                           ? TextInputType.multiline
                           : fieldType == 'number'
-                          ? TextInputType
-                              .number // Тип клавиатуры для чисел
+                          ? TextInputType.number
                           : fieldType == 'phone'
                           ? TextInputType.phone
+                          : fieldType == 'email'
+                          ? TextInputType.emailAddress
                           : TextInputType.text,
-                  maxLines:
-                      isMultiline ? 3 : 1, // Поддержка многострочного ввода
+                  obscureText: fieldType == 'password',
+                  maxLines: isMultiline ? 3 : 1,
                   style: TextStyle(
                     color: appliedTextColor,
                     fontSize: fontSize ?? 14,
                   ),
-                  inputFormatters: inputFormatters, // Применяем ограничители
+                  inputFormatters: inputFormatters,
                   decoration: InputDecoration(
                     hintText:
                         fieldType == 'phone'
                             ? '+7 (999) 999-99-99'
                             : fieldType == 'number'
                             ? 'Введите число'
+                            : fieldType == 'email'
+                            ? 'example@mail.ru'
+                            : fieldType == 'password'
+                            ? 'Минимум 6 символов'
                             : 'Введите текст',
                     hintStyle: TextStyle(
-                      color: appliedTextColor.withOpacity(0.6),
+                      color: appliedTextColor.withValues(alpha: 0.6),
                       fontSize: fontSize ?? 14,
                     ),
                     border: InputBorder.none,
                     isDense: true,
-                    contentPadding: const EdgeInsets.symmetric(vertical: 8),
+                    contentPadding: EdgeInsets.symmetric(
+                      vertical: isMultiline ? 8 : 0,
+                    ),
                   ),
-                  onChanged: onChanged, // Вызываем переданную функцию
+                  onChanged: onChanged,
                 ),
               ),
               if (rightIcon != null) Icon(rightIcon, color: appliedTextColor),

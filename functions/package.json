@@ -1,0 +1,18 @@
+{
+  "name": "nerobot-functions",
+  "description": "Cloud Functions for Nerobot email OTP auth",
+  "engines": {
+    "node": "22"
+  },
+  "main": "index.js",
+  "scripts": {
+    "serve": "firebase emulators:start --only functions,firestore,auth",
+    "deploy": "firebase deploy --only functions"
+  },
+  "dependencies": {
+    "firebase-admin": "^13.0.2",
+    "firebase-functions": "^6.3.0",
+    "nodemailer": "^6.10.1"
+  },
+  "private": true
+}

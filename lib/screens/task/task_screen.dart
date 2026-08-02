@@ -6,11 +6,13 @@ import 'package:flutter/material.dart';
 import 'package:latlong2/latlong.dart';
 import 'package:nerobot/components/bar/bottom_nav_bar.dart';
 import 'package:nerobot/components/list/task_list.dart';
+import 'package:nerobot/components/ui/pill_tabs.dart';
 import 'package:nerobot/components/ui/task_filters.dart';
-import 'package:nerobot/components/placeholder/task_empty.dart';
+import 'package:nerobot/constants/app_colors.dart';
 import 'package:nerobot/router/app_router.gr.dart';
+import 'package:nerobot/utils/formatRuDate.dart';
 import 'package:nerobot/utils/task_loader.dart';
-import 'package:nerobot/utils/subscription_utils.dart';
+import 'package:nerobot/utils/push_token_manager.dart';
 
 @RoutePage()
 class TaskScreen extends StatefulWidget {
@@ -31,8 +33,6 @@ class _TaskScreenState extends State<TaskScreen> {
   List<Map<String, dynamic>> _recentTasks = [];
 
   bool _isLoadingRecent = false;
-  bool _hasActiveSubscription = false;
-  bool _isLoadingSubscription = true;
 
   final Map<String, String> _orderChats = {};
   StreamSubscription<DocumentSnapshot<Map<String, dynamic>>>? _roleSub;
@@ -61,18 +61,22 @@ class _TaskScreenState extends State<TaskScreen> {
   int get _activeFiltersCount {
     int c = 0;
     if (_activeFilters['minPrice'] != null) c++;
-    if (_activeFilters['radiusKm'] != null) c++;
+    if (_activeFilters['shiftType'] != null) c++;
+    if (_activeFilters['sortBy'] != null) c++;
+    final radius = _activeFilters['radiusKm'];
+    // 50 км — дефолт «весь город», в счётчик не включаем
+    if (radius is num && radius.toDouble() != 50.0) c++;
     return c;
   }
 
   @override
   void initState() {
     super.initState();
+    PushTokenManager.touchLastActive();
     _listenRole();
     _searchController.addListener(() {
       setState(() => searchQuery = _searchController.text.trim());
     });
-    _checkSubscription();
   }
 
   @override
@@ -82,42 +86,41 @@ class _TaskScreenState extends State<TaskScreen> {
     super.dispose();
   }
 
-  // ---------------- SUBSCRIPTION ----------------
-
-  Future<void> _checkSubscription() async {
-    final uid = FirebaseAuth.instance.currentUser?.uid;
-    if (uid == null) return;
-
-    final active = await SubscriptionUtils.getActiveSubscription(uid);
-    if (!mounted) return;
-
-    setState(() {
-      _hasActiveSubscription = active != null;
-      _isLoadingSubscription = false;
-    });
-  }
-
   // ---------------- ROLE ----------------
 
   void _listenRole() {
     final uid = FirebaseAuth.instance.currentUser?.uid;
-    if (uid == null) return;
+    if (uid == null) {
+      setState(() {
+        role = 'worker';
+        isLoading = false;
+      });
+      return;
+    }
 
     _roleSub = FirebaseFirestore.instance
         .collection('users')
         .doc(uid)
         .snapshots()
         .listen((snap) async {
-          final newRole = snap.data()?['type'] ?? 'worker';
-          if (newRole != role) {
+          if (!mounted) return;
+          final rawRole = snap.data()?['type'] as String? ?? 'worker';
+          final newRole = rawRole == 'customer' ? 'customer' : 'worker';
+          final isFirstLoad = role == null;
+          final roleChanged = newRole != role;
+          if (isFirstLoad || roleChanged) {
             setState(() {
               role = newRole;
               tabIndex = 0;
               isLoading = true;
-              searchQuery = '';
-              _searchController.clear();
+              if (roleChanged && !isFirstLoad) {
+                searchQuery = '';
+                _searchController.clear();
+                _activeFilters = {};
+              }
             });
             await _loadTasks();
+            if (!mounted) return;
             if (role == 'worker') {
               await _loadRecentTasks();
             }
@@ -128,6 +131,8 @@ class _TaskScreenState extends State<TaskScreen> {
   // ---------------- LOAD TASKS ----------------
 
   Future<void> _loadTasks() async {
+    if (role == null) return;
+
     try {
       setState(() {
         isLoading = true;
@@ -140,15 +145,27 @@ class _TaskScreenState extends State<TaskScreen> {
         minPrice: _activeFilters['minPrice'],
         radiusKm: _activeFilters['radiusKm'],
         userLocation: _activeFilters['userLocation'],
+        paymentFor: _activeFilters['shiftType'],
+        sortBy: _activeFilters['sortBy'],
       );
 
+      debugPrint(
+        '✅ loadTasks role=$role filter=$_currentFilter count=${data.length}',
+      );
+
+      if (!mounted) return;
       setState(() => tasks = data);
 
       if (role == 'worker' && tabIndex == 0) {
         _loadRecentTasks();
       }
-    } catch (e) {
-      setState(() => error = e);
+    } catch (e, st) {
+      debugPrint('❌ loadTasks error: $e\n$st');
+      if (!mounted) return;
+      setState(() {
+        error = e;
+        tasks = [];
+      });
     } finally {
       if (mounted) setState(() => isLoading = false);
     }
@@ -187,58 +204,69 @@ class _TaskScreenState extends State<TaskScreen> {
         }
       }
 
-      Query query = FirebaseFirestore.instance
-          .collection('orders')
-          .where('status', isEqualTo: 'open')
-          .where('active', isEqualTo: true)
-          .where('deleted', isEqualTo: false);
-
+      // Простой запрос без composite-индекса
       final snap =
-          await query
-              .orderBy('created_date', descending: true)
-              .limit(50) // Увеличиваем лимит для последующей фильтрации
+          await FirebaseFirestore.instance
+              .collection('orders')
+              .where('status', isEqualTo: 'open')
               .get();
 
-      var tasks =
-          snap.docs
-              .map((d) => {...d.data() as Map<String, dynamic>, 'id': d.id})
-              .toList();
+      bool uidInList(dynamic list) {
+        if (list is! List) return false;
+        return list.any((e) => e?.toString() == uid);
+      }
+
+      var tasks = snap.docs
+          .map((d) => {...d.data(), 'id': d.id})
+          .where((task) {
+            if (task['deleted'] == true) return false;
+            if (task['active'] == false) return false;
+            // Уже откликнулись — не показываем в «Последние»
+            if (uidInList(task['responses']) || uidInList(task['workers'])) {
+              return false;
+            }
+            return true;
+          })
+          .toList();
 
       // Фильтрация по координатам города
       if (userCityCoords != null) {
         final distance = Distance();
-        // Радиус для определения одного города (примерно 50 км)
         const cityRadiusMeters = 50000.0;
 
-        tasks =
-            tasks.where((task) {
-              final taskLat = task['lat'];
-              final taskLng = task['lng'];
+        tasks = tasks.where((task) {
+          final taskLat = task['lat'];
+          final taskLng = task['lng'];
+          if (taskLat == null || taskLng == null) return false;
 
-              if (taskLat == null || taskLng == null) {
-                return false;
-              }
+          final taskCoords = LatLng(
+            (taskLat is num)
+                ? taskLat.toDouble()
+                : double.tryParse(taskLat.toString()) ?? 0.0,
+            (taskLng is num)
+                ? taskLng.toDouble()
+                : double.tryParse(taskLng.toString()) ?? 0.0,
+          );
 
-              final taskCoords = LatLng(
-                (taskLat is num)
-                    ? taskLat.toDouble()
-                    : double.tryParse(taskLat.toString()) ?? 0.0,
-                (taskLng is num)
-                    ? taskLng.toDouble()
-                    : double.tryParse(taskLng.toString()) ?? 0.0,
-              );
-
-              final distanceMeters = distance.as(
-                LengthUnit.Meter,
-                userCityCoords!,
-                taskCoords,
-              );
-
-              return distanceMeters <= cityRadiusMeters;
-            }).toList();
+          final distanceMeters = distance.as(
+            LengthUnit.Meter,
+            userCityCoords!,
+            taskCoords,
+          );
+          return distanceMeters <= cityRadiusMeters;
+        }).toList();
       }
 
-      // Берем первые 5 после фильтрации
+      tasks.sort((a, b) {
+        final ad = (a['created_date'] is num)
+            ? (a['created_date'] as num).toInt()
+            : 0;
+        final bd = (b['created_date'] is num)
+            ? (b['created_date'] as num).toInt()
+            : 0;
+        return bd.compareTo(ad);
+      });
+
       setState(() {
         _recentTasks = tasks.take(5).toList();
       });
@@ -264,16 +292,26 @@ class _TaskScreenState extends State<TaskScreen> {
 
     return Scaffold(
       appBar: AppBar(
+        toolbarHeight: 44,
+        backgroundColor: Colors.white,
+        surfaceTintColor: Colors.transparent,
+        scrolledUnderElevation: 0,
+        elevation: 0,
         title:
             _isSearching
                 ? TextField(
                   controller: _searchController,
                   autofocus: true,
-                  decoration: const InputDecoration(hintText: 'Поиск'),
+                  decoration: const InputDecoration(
+                    hintText: 'Поиск',
+                    isDense: true,
+                    border: InputBorder.none,
+                  ),
                 )
                 : const Text('Задания'),
         actions: [
           IconButton(
+            visualDensity: VisualDensity.compact,
             icon: Icon(_isSearching ? Icons.close : Icons.search),
             onPressed: () {
               setState(() {
@@ -285,64 +323,61 @@ class _TaskScreenState extends State<TaskScreen> {
           ),
         ],
         bottom: PreferredSize(
-          preferredSize: const Size.fromHeight(48),
-          child: _buildTabs(titles),
+          preferredSize: const Size.fromHeight(44),
+          child: Padding(
+            padding: const EdgeInsets.fromLTRB(16, 0, 16, 6),
+            child: PillTabs(
+              titles: titles,
+              selectedIndex: tabIndex,
+              onChanged: (i) {
+                setState(() => tabIndex = i);
+                _loadTasks();
+              },
+            ),
+          ),
         ),
       ),
+
       body: RefreshIndicator(
         onRefresh: _loadTasks,
-        child: Padding(
-          padding: const EdgeInsets.all(16),
-          child: Column(
-            children: [
-              if (role == 'worker' &&
-                  !_isLoadingSubscription &&
-                  !_hasActiveSubscription)
-                const Expanded(child: TaskEmpty())
-              else ...[
-                if (role == 'worker' && tabIndex == 0) _buildRecentTasks(),
-                TaskFilters(
-                  activeFiltersCount: _activeFiltersCount,
-                  onApply: (params) async {
-                    setState(() => _activeFilters = params);
-                    await _loadTasks();
-                  },
+        child: CustomScrollView(
+          physics: const AlwaysScrollableScrollPhysics(),
+          clipBehavior: Clip.none,
+          slivers: [
+            SliverPadding(
+              padding: const EdgeInsets.fromLTRB(16, 16, 16, 0),
+              sliver: SliverToBoxAdapter(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
+                  children: [
+                    if (role == 'worker' && tabIndex == 0) _buildRecentTasks(),
+                    if (role == 'worker') ...[
+                      TaskFilters(
+                        activeFiltersCount: _activeFiltersCount,
+                        onApply: (params) async {
+                          setState(() => _activeFilters = params);
+                          await _loadTasks();
+                        },
+                      ),
+                      const SizedBox(height: 8),
+                    ],
+                  ],
                 ),
-                Expanded(
-                  child: TaskList(
-                    tasks: _filteredTasks,
-                    isLoading: isLoading,
-                    error: error,
-                    onTaskTap: _onTaskTap,
-                  ),
-                ),
-              ],
-            ],
-          ),
+              ),
+            ),
+            TaskList(
+              tasks: _filteredTasks,
+              isLoading: isLoading,
+              error: error,
+              onTaskTap: _onTaskTap,
+              asSliver: true,
+            ),
+          ],
         ),
       ),
       bottomNavigationBar: BottomNavBar(showCreateButton: role != 'worker'),
     );
   }
-
-  Widget _buildTabs(List<String> titles) => Row(
-    children: List.generate(titles.length, (i) {
-      final active = tabIndex == i;
-      return Expanded(
-        child: GestureDetector(
-          onTap: () {
-            setState(() => tabIndex = i);
-            _loadTasks();
-          },
-          child: Container(
-            padding: const EdgeInsets.all(12),
-            color: active ? Colors.white : Colors.grey[200],
-            child: Center(child: Text(titles[i])),
-          ),
-        ),
-      );
-    }),
-  );
 
   Widget _buildRecentTasks() {
     if (_recentTasks.isEmpty) return const SizedBox.shrink();
@@ -355,22 +390,92 @@ class _TaskScreenState extends State<TaskScreen> {
         ),
         const SizedBox(height: 8),
         SizedBox(
-          height: 120,
-          child: ListView.builder(
+          height: 88,
+          child: ListView.separated(
             scrollDirection: Axis.horizontal,
+            clipBehavior: Clip.none,
+            padding: const EdgeInsets.symmetric(vertical: 6, horizontal: 2),
             itemCount: _recentTasks.length,
-            itemBuilder:
-                (_, i) => GestureDetector(
-                  onTap: () => _onTaskTap(_recentTasks[i]),
-                  child: Card(
-                    child: Padding(
-                      padding: const EdgeInsets.all(12),
-                      child: Text(_recentTasks[i]['title'] ?? ''),
-                    ),
+            separatorBuilder: (_, __) => const SizedBox(width: 8),
+            itemBuilder: (_, i) {
+              final task = _recentTasks[i];
+              final createdMs = task['created_date'];
+              final created = createdMs is int
+                  ? DateTime.fromMillisecondsSinceEpoch(createdMs).toLocal()
+                  : null;
+              final price = task['price'];
+
+              return GestureDetector(
+                onTap: () => _onTaskTap(task),
+                child: Container(
+                  width: 168,
+                  margin: const EdgeInsets.symmetric(vertical: 4),
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 12,
+                    vertical: 10,
+                  ),
+                  decoration: BoxDecoration(
+                    color: Colors.white,
+                    borderRadius: BorderRadius.circular(12),
+                    boxShadow: [
+                      BoxShadow(
+                        color: Colors.black.withValues(alpha: 0.06),
+                        blurRadius: 20,
+                        offset: const Offset(0, 6),
+                      ),
+                      BoxShadow(
+                        color: Colors.black.withValues(alpha: 0.03),
+                        blurRadius: 6,
+                        offset: const Offset(0, 2),
+                      ),
+                    ],
+                  ),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    children: [
+                      Text(
+                        task['title']?.toString() ?? 'Без названия',
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: const TextStyle(
+                          fontSize: 14,
+                          fontWeight: FontWeight.w600,
+                        ),
+                      ),
+                      const SizedBox(height: 6),
+                      Row(
+                        children: [
+                          Expanded(
+                            child: Text(
+                              created != null ? formatRuDate(created) : '—',
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                              style: TextStyle(
+                                fontSize: 12,
+                                color: Colors.grey[600],
+                              ),
+                            ),
+                          ),
+                          const SizedBox(width: 6),
+                          Text(
+                            price != null ? '$price ₽' : '—',
+                            style: const TextStyle(
+                              fontSize: 12,
+                              fontWeight: FontWeight.w600,
+                              color: AppColors.violet,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ],
                   ),
                 ),
+              );
+            },
           ),
         ),
+        const SizedBox(height: 12),
       ],
     );
   }

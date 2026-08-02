@@ -40,7 +40,7 @@ Future<void> showEditInput({
               width: double.infinity,
               child: Btn(
                 text: 'Сохранить',
-                theme: 'violet',
+                theme: 'primary',
                 padding: EdgeInsets.symmetric(vertical: 14, horizontal: 16),
                 onPressed: () {
                   Navigator.pop(context, controller.text);

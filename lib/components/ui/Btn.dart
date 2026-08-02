@@ -1,6 +1,11 @@
 import 'package:flutter/material.dart';
 import 'package:nerobot/constants/app_colors.dart';
 
+/// Кнопки приложения.
+///
+/// Themes:
+/// - `violet` / `primary` — primary (заливка violet, белый текст)
+/// - `light` / `white` / `secondary` — secondary (светлый фон, violet текст)
 class Btn extends StatelessWidget {
   final String text;
   final VoidCallback? onPressed;
@@ -8,84 +13,78 @@ class Btn extends StatelessWidget {
   final Color? textColor;
   final double borderRadius;
   final EdgeInsetsGeometry padding;
-  final bool disabled; // Добавляем параметр для состояния disabled
+  final bool disabled;
 
   const Btn({
     super.key,
     required this.text,
     this.onPressed,
-    this.theme = 'yellow',
+    this.theme = 'secondary',
     this.textColor,
-    this.borderRadius = 100.0,
-    this.padding = const EdgeInsets.symmetric(vertical: 16, horizontal: 24),
-    this.disabled = false, // Значение по умолчанию для disabled
+    this.borderRadius = 100,
+    this.padding = const EdgeInsets.symmetric(vertical: 14, horizontal: 24),
+    this.disabled = false,
   });
 
-  // Метод для получения цвета фона в зависимости от темы и состояния disabled
-  Color _getBackgroundColor() {
-    if (disabled) return Colors.grey.shade400; // Цвет для disabled состояния
-    switch (theme) {
-      case 'light':
-        return AppColors.ulight;
-      case 'violet':
-        return AppColors.violet;
-      case 'white':
-        return AppColors.white;
-      case 'red':
-        return AppColors.red;
-      case 'yellow':
-      default:
-        return AppColors.yellow;
+  bool get _isPrimary => theme == 'violet' || theme == 'primary';
+
+  Color get _backgroundColor {
+    if (disabled) {
+      return _isPrimary ? AppColors.violet.withValues(alpha: 0.4) : Colors.grey.shade200;
     }
+    return _isPrimary ? AppColors.violet : AppColors.ulight;
   }
 
-  // Метод для получения цвета текста в зависимости от темы и состояния disabled
-  Color _getTextColor() {
-    if (disabled)
-      return Colors.grey.shade600; // Цвет текста для disabled состояния
-    if (textColor != null) return textColor!;
-    switch (theme) {
-      case 'light':
-        return AppColors.black;
-      case 'violet':
-        return AppColors.white;
-      case 'yellow':
-        return AppColors.white;
-      case 'white':
-        return AppColors.violet;
-      default:
-        return AppColors.black;
+  Color get _labelColor {
+    if (disabled) {
+      return _isPrimary ? Colors.white70 : Colors.grey.shade500;
     }
+    if (textColor != null) return textColor!;
+    return _isPrimary ? Colors.white : AppColors.violet;
   }
 
   @override
   Widget build(BuildContext context) {
-    return ElevatedButton(
-      style: ElevatedButton.styleFrom(
-        padding: padding,
-        backgroundColor: _getBackgroundColor(),
-        elevation:
-            (theme == 'white' || disabled)
-                ? 0
-                : null, // Убираем тень для disabled или white
-        shadowColor:
-            (theme == 'white' || disabled)
-                ? Colors.transparent
-                : null, // Убираем тень для disabled или white
-        shape: RoundedRectangleBorder(
-          borderRadius: BorderRadius.circular(borderRadius),
-        ),
-      ).copyWith(
-        overlayColor: WidgetStateProperty.resolveWith<Color?>((states) {
-          if (theme == 'white' || disabled)
-            return Colors
-                .transparent; // Убираем эффект нажатия для disabled или white
-          return null;
-        }),
+    return DecoratedBox(
+      decoration: BoxDecoration(
+        borderRadius: BorderRadius.circular(borderRadius),
+        boxShadow: disabled
+            ? null
+            : [
+                BoxShadow(
+                  color: Colors.black.withValues(alpha: _isPrimary ? 0.12 : 0.06),
+                  blurRadius: 16,
+                  offset: const Offset(0, 4),
+                ),
+                BoxShadow(
+                  color: Colors.black.withValues(alpha: 0.03),
+                  blurRadius: 4,
+                  offset: const Offset(0, 1),
+                ),
+              ],
       ),
-      onPressed:
-          disabled ? null : onPressed, // Блокируем нажатие, если disabled
-      child: Text(text, style: TextStyle(color: _getTextColor(), fontSize: 16)),
+      child: Material(
+        color: _backgroundColor,
+        borderRadius: BorderRadius.circular(borderRadius),
+        child: InkWell(
+          onTap: disabled ? null : onPressed,
+          borderRadius: BorderRadius.circular(borderRadius),
+          child: Padding(
+            padding: padding,
+            child: Center(
+              child: Text(
+                text,
+                textAlign: TextAlign.center,
+                style: TextStyle(
+                  color: _labelColor,
+                  fontSize: 16,
+                  fontWeight: FontWeight.w500,
+                ),
+              ),
+            ),
+          ),
+        ),
+      ),
     );
   }
 }

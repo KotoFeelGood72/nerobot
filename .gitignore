@@ -43,3 +43,18 @@ app.*.map.json
 /android/app/debug
 /android/app/profile
 /android/app/release
+
+# Secrets / local env
+functions/.env
+functions/.env.*
+functions/.secret.local
+!functions/.env.example
+dart_defines.json
+**/serviceAccount*.json
+**/*credentials*.json
+
+# Cloud Functions
+functions/node_modules/
+
+.tmp-sa-key*
+functions/.tmp-sa-key*

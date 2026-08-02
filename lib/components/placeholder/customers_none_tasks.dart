@@ -49,7 +49,7 @@ class CustomersNoneTasks extends StatelessWidget {
           if (role == 'Customer' && btn)
             Btn(
               text: 'Создать задание',
-              theme: 'white',
+              theme: 'primary',
               onPressed: () {
                 AutoRouter.of(context).push(NewTaskCreateRoute());
               },

@@ -1,32 +1,27 @@
 import 'dart:async';
+
 import 'package:auto_route/auto_route.dart';
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_otp_text_field/flutter_otp_text_field.dart';
-import 'package:firebase_auth/firebase_auth.dart';
 
 import 'package:nerobot/components/ui/Btn.dart';
 import 'package:nerobot/constants/app_colors.dart';
 import 'package:nerobot/layouts/empty_layout.dart';
 import 'package:nerobot/router/app_router.gr.dart';
-
-import 'package:nerobot/utils/subscription_utils.dart';
 import 'package:nerobot/services/user_service.dart';
+import 'package:nerobot/utils/email_auth_helper.dart';
+import 'package:nerobot/utils/push_token_manager.dart';
 
 @RoutePage()
 class ConfirmScreen extends StatefulWidget {
-  final String verificationId;
   final String role;
-  /// Номер, на который отправили код (для повторной отправки)
-  final String phoneNumber;
-  /// Токен для force resend (док: forceResendingToken). На iOS всегда null.
-  final int? resendToken;
+  final String email;
 
   const ConfirmScreen({
     super.key,
-    required this.verificationId,
     required this.role,
-    required this.phoneNumber,
-    this.resendToken,
+    required this.email,
   });
 
   @override
@@ -38,22 +33,29 @@ class _ConfirmScreenState extends State<ConfirmScreen> {
   int remainingSeconds = 60;
   late Timer _timer;
   bool canResend = false;
-  int resendCount = 0;
-  /// Текущий verificationId (обновляется при resend).
-  late String _verificationId;
-  /// Токен для принудительной повторной отправки (по доке forceResendingToken).
-  int? _resendToken;
+  bool isLoading = false;
+  String _code = '';
 
   @override
   void initState() {
     super.initState();
-    _verificationId = widget.verificationId;
-    _resendToken = widget.resendToken;
     _startTimer();
   }
 
+  @override
+  void dispose() {
+    _timer.cancel();
+    super.dispose();
+  }
+
   void _startTimer() {
+    canResend = false;
+    remainingSeconds = 60;
     _timer = Timer.periodic(const Duration(seconds: 1), (timer) {
+      if (!mounted) {
+        timer.cancel();
+        return;
+      }
       if (remainingSeconds == 0) {
         setState(() => canResend = true);
         timer.cancel();
@@ -63,127 +65,144 @@ class _ConfirmScreenState extends State<ConfirmScreen> {
     });
   }
 
+  /// Push-токен не должен ломать вход (на симуляторе APNS часто отсутствует).
+  Future<void> _saveDeviceToken() => PushTokenManager.registerCurrentDevice();
+
   Future<void> _verify(String code) async {
+    if (code.length != 6 || isLoading) return;
+
+    setState(() {
+      isLoading = true;
+      errorMessage = null;
+    });
+
     try {
-      final cred = PhoneAuthProvider.credential(
-        verificationId: _verificationId,
-        smsCode: code,
+      final userCred = await EmailAuthHelper.verifyOtp(
+        email: widget.email,
+        code: code,
       );
-
-      final userCred =
-          await FirebaseAuth.instance.signInWithCredential(cred);
-
       final user = userCred.user;
-      if (user == null) throw Exception("User is null");
+      if (user == null) throw Exception('User is null');
 
-      // Создаём юзера
-      await UserService.createUserIfNotExists(user, widget.role);
-
-      // Добавляем триал
-      await SubscriptionUtils.ensureFreeTrial(user.uid);
+      final created = await UserService.createUserIfNotExists(user, widget.role);
+      if (!created) {
+        throw Exception('Не удалось создать профиль пользователя');
+      }
+      await _saveDeviceToken();
 
       if (!mounted) return;
       AutoRouter.of(context).replaceAll([const TaskRoute()]);
-    } on FirebaseAuthException catch (e) {
-      String msg = 'Ошибка';
-
-      switch (e.code) {
-        case 'invalid-verification-code':
-          msg = 'Неверный код';
-          break;
-        case 'session-expired':
-          msg = 'Сессия истекла';
-          break;
-        default:
-          msg = e.message ?? 'Ошибка';
-      }
-
-      setState(() => errorMessage = msg);
+    } catch (e, st) {
+      debugPrint('❌ Email OTP verify error: $e\n$st');
+      if (!mounted) return;
+      setState(() => errorMessage = EmailAuthHelper.mapError(e));
+    } finally {
+      if (mounted) setState(() => isLoading = false);
     }
   }
 
   Future<void> _resend() async {
-    if (!canResend) return;
+    if (!canResend || isLoading) return;
 
-    _timer.cancel();
     setState(() {
-      canResend = false;
-      remainingSeconds = 60;
+      isLoading = true;
+      errorMessage = null;
     });
-    _startTimer();
 
-    await FirebaseAuth.instance.verifyPhoneNumber(
-      phoneNumber: widget.phoneNumber,
-      forceResendingToken: _resendToken,
-      timeout: const Duration(seconds: 60),
-      verificationCompleted: (_) {},
-      verificationFailed: (e) {
-        if (mounted) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(content: Text(e.message ?? 'Ошибка отправки кода')),
-          );
-        }
-      },
-      codeSent: (String newVerificationId, int? newResendToken) {
-        if (!mounted) return;
-        setState(() {
-          _verificationId = newVerificationId;
-          _resendToken = newResendToken;
-          resendCount++;
-          remainingSeconds = 60;
-          canResend = false;
-        });
-      },
-      codeAutoRetrievalTimeout: (_) {},
-    );
-  }
+    try {
+      final debugCode = await EmailAuthHelper.sendOtp(widget.email);
+      if (!mounted) return;
 
-  @override
-  void dispose() {
-    _timer.cancel();
-    super.dispose();
+      if (kDebugMode && debugCode != null) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Debug OTP: $debugCode'),
+            backgroundColor: Colors.orange,
+          ),
+        );
+      }
+
+      _timer.cancel();
+      _startTimer();
+    } catch (e, st) {
+      debugPrint('❌ Email OTP resend error: $e\n$st');
+      if (!mounted) return;
+      setState(() => errorMessage = EmailAuthHelper.mapError(e));
+    } finally {
+      if (mounted) setState(() => isLoading = false);
+    }
   }
 
   @override
   Widget build(BuildContext context) {
     return EmptyLayout(
-      title: 'Код подтверждения',
+      title: 'Подтверждение',
       body: Padding(
         padding: const EdgeInsets.symmetric(horizontal: 16),
         child: Column(
-          mainAxisAlignment: MainAxisAlignment.center,
+          crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
+            const SizedBox(height: 24),
+            Text(
+              'Код отправлен на ${widget.email}',
+              textAlign: TextAlign.center,
+              style: const TextStyle(color: AppColors.gray),
+            ),
+            const SizedBox(height: 24),
             OtpTextField(
               numberOfFields: 6,
-              borderColor: errorMessage != null ? Colors.red : AppColors.border,
-              filled: true,
-              fillColor: AppColors.ulight,
-              onSubmit: (code) async => await _verify(code),
+              fieldWidth: 48,
+              fieldHeight: 56,
+              borderColor: AppColors.border,
+              focusedBorderColor: AppColors.violet,
+              enabledBorderColor: AppColors.border,
+              showFieldAsBox: true,
+              borderRadius: BorderRadius.circular(10),
+              borderWidth: 1.5,
+              alignment: Alignment.center,
+              contentPadding: EdgeInsets.zero,
+              margin: const EdgeInsets.symmetric(horizontal: 4),
+              textStyle: const TextStyle(
+                fontSize: 22,
+                fontWeight: FontWeight.w600,
+                height: 1.0,
+                color: Colors.black,
+              ),
+              onCodeChanged: (value) {
+                setState(() => _code = value);
+              },
+              onSubmit: _verify,
             ),
+            if (errorMessage != null) ...[
+              const SizedBox(height: 12),
+              Text(
+                errorMessage!,
+                textAlign: TextAlign.center,
+                style: const TextStyle(color: Colors.red),
+              ),
+            ],
+            const SizedBox(height: 24),
+            if (isLoading)
+              const Center(child: CircularProgressIndicator())
+            else
+              Btn(
+                text: 'Подтвердить',
+                theme: 'primary',
+                onPressed: _code.length == 6 ? () => _verify(_code) : null,
+                disabled: _code.length != 6,
+              ),
             const SizedBox(height: 12),
-
-            if (errorMessage != null)
-              Text(errorMessage!, style: const TextStyle(color: Colors.red)),
-
-            const SizedBox(height: 20),
-
-            Text(
-              canResend
-                  ? "Можно отправить код повторно"
-                  : "Запросить новый код через $remainingSeconds сек",
-              style: TextStyle(
-                color: canResend ? Colors.green : Colors.grey,
+            TextButton(
+              onPressed: canResend && !isLoading ? _resend : null,
+              child: Text(
+                canResend
+                    ? 'Отправить код ещё раз'
+                    : 'Повторная отправка через $remainingSeconds с',
+                style: TextStyle(
+                  color: canResend ? AppColors.violet : AppColors.gray,
+                ),
               ),
             ),
-
-            const SizedBox(height: 12),
-
-            Btn(
-              text: "Отправить код ещё раз",
-              disabled: !canResend,
-              theme: 'violet',
-              onPressed: canResend ? _resend : null,
-            )
           ],
         ),
       ),

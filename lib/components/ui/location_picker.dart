@@ -1,8 +1,10 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_map/flutter_map.dart';
-import 'package:geolocator/geolocator.dart';
 import 'package:geocoding/geocoding.dart';
+import 'package:geolocator/geolocator.dart';
 import 'package:latlong2/latlong.dart';
+import 'package:nerobot/components/ui/Btn.dart';
+import 'package:nerobot/config/maps_config.dart';
 
 class LocationPickerMap extends StatefulWidget {
   final LatLng initialLocation;
@@ -11,8 +13,8 @@ class LocationPickerMap extends StatefulWidget {
   const LocationPickerMap({
     required this.initialLocation,
     required this.onLocationSelected,
-    Key? key,
-  }) : super(key: key);
+    super.key,
+  });
 
   @override
   State<LocationPickerMap> createState() => _LocationPickerMapState();
@@ -22,89 +24,104 @@ class _LocationPickerMapState extends State<LocationPickerMap> {
   late LatLng _selectedLocation;
   String? _selectedAddress;
   bool _isLoading = false;
+  final _mapController = MapController();
 
   @override
   void initState() {
     super.initState();
-    // Сразу выставляем переданное initialLocation
     _selectedLocation = widget.initialLocation;
     _getAddressFromLatLng(_selectedLocation);
   }
 
+  @override
+  void dispose() {
+    _mapController.dispose();
+    super.dispose();
+  }
+
   Future<void> _getAddressFromLatLng(LatLng location) async {
-    setState(() {
-      _isLoading = true;
-    });
+    setState(() => _isLoading = true);
 
     try {
-      List<Placemark> placemarks = await placemarkFromCoordinates(
+      final placemarks = await placemarkFromCoordinates(
         location.latitude,
         location.longitude,
       );
+      if (!mounted) return;
       if (placemarks.isNotEmpty) {
         final place = placemarks.first;
+        final street = place.street?.trim();
+        final locality = place.locality?.trim() ?? place.subAdministrativeArea;
+        final parts = [
+          if (street != null && street.isNotEmpty) street,
+          if (locality != null && locality.isNotEmpty) locality,
+        ];
         setState(() {
-          _selectedAddress = "${place.street}, ${place.locality}";
+          _selectedAddress =
+              parts.isNotEmpty ? parts.join(', ') : 'Адрес не найден';
         });
       } else {
-        setState(() {
-          _selectedAddress = "Адрес не найден";
-        });
+        setState(() => _selectedAddress = 'Адрес не найден');
       }
-    } catch (e) {
-      setState(() {
-        _selectedAddress = "Ошибка получения адреса";
-      });
+    } catch (_) {
+      if (!mounted) return;
+      setState(() => _selectedAddress = 'Ошибка получения адреса');
+    } finally {
+      if (mounted) setState(() => _isLoading = false);
     }
-
-    setState(() {
-      _isLoading = false;
-    });
   }
 
   Future<void> _getCurrentLocation() async {
-    bool serviceEnabled = await Geolocator.isLocationServiceEnabled();
-    if (!serviceEnabled) {
+    if (!await Geolocator.isLocationServiceEnabled()) {
+      if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text("Служба геолокации отключена")),
+        const SnackBar(content: Text('Служба геолокации отключена')),
       );
       return;
     }
 
-    LocationPermission permission = await Geolocator.checkPermission();
+    var permission = await Geolocator.checkPermission();
     if (permission == LocationPermission.denied) {
       permission = await Geolocator.requestPermission();
       if (permission == LocationPermission.denied) {
+        if (!mounted) return;
         ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text("Разрешение на геолокацию отклонено")),
+          const SnackBar(content: Text('Разрешение на геолокацию отклонено')),
         );
         return;
       }
     }
 
     if (permission == LocationPermission.deniedForever) {
-      ScaffoldMessenger.of(
-        context,
-      ).showSnackBar(const SnackBar(content: Text("Геолокация заблокирована")));
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Геолокация заблокирована')),
+      );
       return;
     }
 
-    Position position = await Geolocator.getCurrentPosition(
-      desiredAccuracy: LocationAccuracy.high,
+    final position = await Geolocator.getCurrentPosition(
+      locationSettings: const LocationSettings(
+        accuracy: LocationAccuracy.high,
+      ),
     );
-    LatLng currentLocation = LatLng(position.latitude, position.longitude);
+    final currentLocation = LatLng(position.latitude, position.longitude);
 
-    setState(() {
-      _selectedLocation = currentLocation;
-    });
+    setState(() => _selectedLocation = currentLocation);
+    _mapController.move(currentLocation, 15);
     _getAddressFromLatLng(currentLocation);
+  }
+
+  void _onMapTap(TapPosition _, LatLng point) {
+    setState(() => _selectedLocation = point);
+    _getAddressFromLatLng(point);
   }
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
-        title: const Text("Выберите локацию"),
+        title: const Text('Выберите локацию'),
         centerTitle: true,
         actions: [
           IconButton(
@@ -117,69 +134,82 @@ class _LocationPickerMapState extends State<LocationPickerMap> {
         children: [
           Expanded(
             child: FlutterMap(
+              mapController: _mapController,
               options: MapOptions(
-                // Используем выбранную локацию из initState
                 initialCenter: _selectedLocation,
-                initialZoom: 13.0,
-                onTap: (tapPosition, point) {
-                  setState(() {
-                    _selectedLocation = point;
-                  });
-                  _getAddressFromLatLng(point);
-                },
+                initialZoom: 13,
+                onTap: _onMapTap,
               ),
               children: [
                 TileLayer(
-                  // Без subdomains, один URL для OSM
-                  urlTemplate: "https://tile.openstreetmap.org/{z}/{x}/{y}.png",
+                  urlTemplate: MapsConfig.tileUrl,
+                  userAgentPackageName: 'com.sprestay.handyman',
+                  maxZoom: 19,
                 ),
                 MarkerLayer(
                   markers: [
                     Marker(
                       point: _selectedLocation,
-                      width: 40,
-                      height: 40,
-                      child: const Icon(
-                        Icons.location_on,
-                        color: Colors.red,
-                        size: 40,
+                      width: 48,
+                      height: 64,
+                      alignment: Alignment.topCenter,
+                      child: Image.asset(
+                        'assets/icons/map_pin.png',
+                        width: 48,
+                        height: 64,
+                        errorBuilder: (_, __, ___) => const Icon(
+                          Icons.location_on,
+                          color: Colors.red,
+                          size: 40,
+                        ),
                       ),
                     ),
+                  ],
+                ),
+                const RichAttributionWidget(
+                  attributions: [
+                    TextSourceAttribution('© Яндекс.Карты'),
                   ],
                 ),
               ],
             ),
           ),
-
-          if (_isLoading)
-            const Padding(
-              padding: EdgeInsets.all(8.0),
-              child: CircularProgressIndicator(),
-            ),
-
-          if (_selectedAddress != null)
-            Padding(
-              padding: const EdgeInsets.all(8.0),
-              child: Text(
-                _selectedAddress!,
-                textAlign: TextAlign.center,
-                style: const TextStyle(fontSize: 16),
-              ),
-            ),
-
-          Padding(
-            padding: const EdgeInsets.all(16.0),
-            child: ElevatedButton(
-              onPressed: () {
-                if (_selectedLocation != null && _selectedAddress != null) {
-                  widget.onLocationSelected(
-                    _selectedLocation,
-                    _selectedAddress!,
-                  );
-                  Navigator.of(context).pop();
-                }
-              },
-              child: const Text("Выбрать"),
+          SafeArea(
+            top: false,
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                if (_isLoading)
+                  const Padding(
+                    padding: EdgeInsets.all(8),
+                    child: CircularProgressIndicator(),
+                  ),
+                if (_selectedAddress != null)
+                  Padding(
+                    padding: const EdgeInsets.fromLTRB(16, 8, 16, 0),
+                    child: Text(
+                      _selectedAddress!,
+                      textAlign: TextAlign.center,
+                      style: const TextStyle(fontSize: 16),
+                    ),
+                  ),
+                Padding(
+                  padding: const EdgeInsets.fromLTRB(16, 12, 16, 8),
+                  child: SizedBox(
+                    width: double.infinity,
+                    child: Btn(
+                      text: 'Выбрать',
+                      theme: 'primary',
+                      onPressed: () {
+                        final address = _selectedAddress;
+                        if (address == null || address.isEmpty) return;
+                        widget.onLocationSelected(_selectedLocation, address);
+                        Navigator.of(context).pop();
+                      },
+                    ),
+                  ),
+                ),
+              ],
             ),
           ),
         ],

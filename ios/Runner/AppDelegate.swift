@@ -1,27 +1,41 @@
 import Flutter
 import UIKit
 import FirebaseAuth
+import FirebaseMessaging
 
 @main
-@objc class AppDelegate: FlutterAppDelegate {
+@objc class AppDelegate: FlutterAppDelegate, FlutterImplicitEngineDelegate {
   override func application(
     _ application: UIApplication,
     didFinishLaunchingWithOptions launchOptions: [UIApplication.LaunchOptionsKey: Any]?
   ) -> Bool {
-    GeneratedPluginRegistrant.register(with: self)
+    // Регистрация в APNs → нужен для FCM push на iOS
+    application.registerForRemoteNotifications()
     return super.application(application, didFinishLaunchingWithOptions: launchOptions)
   }
 
-  // Firebase Phone Auth: передаём APNs token (нужно при FirebaseAppDelegateProxyEnabled = false)
+  func didInitializeImplicitFlutterEngine(_ engineBridge: FlutterImplicitEngineBridge) {
+    GeneratedPluginRegistrant.register(with: engineBridge.pluginRegistry)
+  }
+
   override func application(
     _ application: UIApplication,
     didRegisterForRemoteNotificationsWithDeviceToken deviceToken: Data
   ) {
+    // Firebase Auth (silent push) + FCM
     Auth.auth().setAPNSToken(deviceToken, type: .unknown)
+    Messaging.messaging().apnsToken = deviceToken
     super.application(application, didRegisterForRemoteNotificationsWithDeviceToken: deviceToken)
   }
 
-  // Firebase Phone Auth: пуши от Firebase Auth (silent push для верификации)
+  override func application(
+    _ application: UIApplication,
+    didFailToRegisterForRemoteNotificationsWithError error: Error
+  ) {
+    NSLog("⚠️ APNs registration failed: \(error.localizedDescription)")
+    super.application(application, didFailToRegisterForRemoteNotificationsWithError: error)
+  }
+
   override func application(
     _ application: UIApplication,
     didReceiveRemoteNotification userInfo: [AnyHashable: Any],
@@ -31,11 +45,13 @@ import FirebaseAuth
       completionHandler(.noData)
       return
     }
-    super.application(application, didReceiveRemoteNotification: userInfo, fetchCompletionHandler: completionHandler)
-    completionHandler(.noData)
+    super.application(
+      application,
+      didReceiveRemoteNotification: userInfo,
+      fetchCompletionHandler: completionHandler
+    )
   }
 
-  // Firebase Phone Auth: редирект из reCAPTCHA по custom URL scheme — обязательно при отключённом swizzling
   override func application(
     _ app: UIApplication,
     open url: URL,

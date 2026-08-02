@@ -1,5 +1,4 @@
 import 'package:flutter/material.dart';
-import 'package:nerobot/constants/app_colors.dart';
 import 'package:nerobot/utils/formatRuDate.dart';
 
 /// утилита: превращаем Duration в «2 дн 5 ч» - коротко и по-русски
@@ -55,23 +54,28 @@ class CardTask extends StatelessWidget {
         clipBehavior: Clip.none,
         children: [
           // Сама карточка
-          Card(
-            elevation: 2,
-            shadowColor: AppColors.gray,
-            child: Container(
-              padding: const EdgeInsets.all(16),
-              decoration: BoxDecoration(
-                color: Colors.white,
-                borderRadius: BorderRadius.circular(12),
-                // boxShadow: [
-                //   BoxShadow(
-                //     color: Colors.black.withOpacity(0.08),
-                //     blurRadius: 10,
-                //     offset: const Offset(0, 5),
-                //   ),
-                // ],
-              ),
-              child: Column(
+          Container(
+            padding: const EdgeInsets.all(16),
+            decoration: BoxDecoration(
+              color: Colors.white,
+              borderRadius: BorderRadius.circular(12),
+              boxShadow: [
+                BoxShadow(
+                  color: Colors.black.withValues(alpha: 0.06),
+                  blurRadius: 20,
+                  spreadRadius: 0,
+                  offset: const Offset(0, 6),
+                ),
+                BoxShadow(
+                  color: Colors.black.withValues(alpha: 0.03),
+                  blurRadius: 6,
+                  spreadRadius: 0,
+                  offset: const Offset(0, 2),
+                ),
+              ],
+            ),
+            child: Column(
+
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   // ---- заголовок + дата создания ----------------------------------
@@ -136,7 +140,6 @@ class CardTask extends StatelessWidget {
                   ),
                 ],
               ),
-            ),
           ),
 
           // Если задача новая – рисуем маленький красный кружок в правом углу

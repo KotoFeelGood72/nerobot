@@ -189,7 +189,7 @@ class _ProfileFeedbackScreenState extends State<ProfileFeedbackScreen> {
                       Expanded(
                         child: Btn(
                           text: 'Отправить',
-                          theme: 'violet',
+                          theme: 'primary',
                           onPressed:
                               _isSendButtonEnabled ? _sendFeedback : null,
                         ),

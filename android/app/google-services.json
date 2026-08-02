@@ -7,12 +7,33 @@
   "client": [
     {
       "client_info": {
-        "mobilesdk_app_id": "1:408622761678:android:9d16dbf09827eadc19f29f",
+        "mobilesdk_app_id": "1:408622761678:android:8ef469e8e25b6f9319f29f",
         "android_client_info": {
-          "package_name": "com.sprestay.handyman"
+          "package_name": "com.handywork.app"
         }
       },
-      "oauth_client": [],
+      "oauth_client": [
+        {
+          "client_id": "408622761678-7icl7ir7r0eks7dtt5hogf2vu6js4tju.apps.googleusercontent.com",
+          "client_type": 1,
+          "android_info": {
+            "package_name": "com.handywork.app",
+            "certificate_hash": "8e8b6db45a4d85ddc23d3de30b3b077ddbee4df7"
+          }
+        },
+        {
+          "client_id": "408622761678-el1a0ir1dkteel6avvsc4bo7p6pemet8.apps.googleusercontent.com",
+          "client_type": 1,
+          "android_info": {
+            "package_name": "com.handywork.app",
+            "certificate_hash": "c87cbc9cc5f4722d590c3f01f793df5c33df245d"
+          }
+        },
+        {
+          "client_id": "408622761678-l4344qbvnh0c8nc05o2767lfdfam54j9.apps.googleusercontent.com",
+          "client_type": 3
+        }
+      ],
       "api_key": [
         {
           "current_key": "AIzaSyAKezJnWvIKTFgmfnJ3WiE1X3i9mPhqJDI"
@@ -20,7 +41,19 @@
       ],
       "services": {
         "appinvite_service": {
-          "other_platform_oauth_client": []
+          "other_platform_oauth_client": [
+            {
+              "client_id": "408622761678-l4344qbvnh0c8nc05o2767lfdfam54j9.apps.googleusercontent.com",
+              "client_type": 3
+            },
+            {
+              "client_id": "408622761678-0t3lieebb8unt3aha35dke456439agmd.apps.googleusercontent.com",
+              "client_type": 2,
+              "ios_info": {
+                "bundle_id": "com.nerobot.app.nerobot"
+              }
+            }
+          ]
         }
       }
     },
@@ -31,7 +64,36 @@
           "package_name": "com.sprestay.handyman"
         }
       },
-      "oauth_client": [],
+      "oauth_client": [
+        {
+          "client_id": "408622761678-13h0j6ndibdh7325grrvaagpode5vjak.apps.googleusercontent.com",
+          "client_type": 1,
+          "android_info": {
+            "package_name": "com.sprestay.handyman",
+            "certificate_hash": "c87cbc9cc5f4722d590c3f01f793df5c33df245d"
+          }
+        },
+        {
+          "client_id": "408622761678-9g4prfs0d13ohjhdomkfu1c2m053i9hg.apps.googleusercontent.com",
+          "client_type": 1,
+          "android_info": {
+            "package_name": "com.sprestay.handyman",
+            "certificate_hash": "ed716ed9aa565f9390312e20127b08c42b63bbea"
+          }
+        },
+        {
+          "client_id": "408622761678-e29ob7gh38d74rljjhc19p47q42b6lam.apps.googleusercontent.com",
+          "client_type": 1,
+          "android_info": {
+            "package_name": "com.sprestay.handyman",
+            "certificate_hash": "4f2a6ad9956132e32a41417dd81f80a5476e483f"
+          }
+        },
+        {
+          "client_id": "408622761678-l4344qbvnh0c8nc05o2767lfdfam54j9.apps.googleusercontent.com",
+          "client_type": 3
+        }
+      ],
       "api_key": [
         {
           "current_key": "AIzaSyAKezJnWvIKTFgmfnJ3WiE1X3i9mPhqJDI"
@@ -39,7 +101,19 @@
       ],
       "services": {
         "appinvite_service": {
-          "other_platform_oauth_client": []
+          "other_platform_oauth_client": [
+            {
+              "client_id": "408622761678-l4344qbvnh0c8nc05o2767lfdfam54j9.apps.googleusercontent.com",
+              "client_type": 3
+            },
+            {
+              "client_id": "408622761678-0t3lieebb8unt3aha35dke456439agmd.apps.googleusercontent.com",
+              "client_type": 2,
+              "ios_info": {
+                "bundle_id": "com.nerobot.app.nerobot"
+              }
+            }
+          ]
         }
       }
     }

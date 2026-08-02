@@ -80,16 +80,6 @@ class AppRouter extends RootStackRouter {
       guards: [_authGuard],
     ),
     AutoRoute(
-      page: ProfileSubscriptionRoute.page,
-      path: '/profile/subscription',
-      guards: [_authGuard],
-    ),
-    AutoRoute(
-      page: ProfileHistoryPriceRoute.page,
-      path: '/profile/history',
-      guards: [_authGuard],
-    ),
-    AutoRoute(
       page: ProfileHelpRoute.page,
       path: '/profile/help',
       guards: [_authGuard],

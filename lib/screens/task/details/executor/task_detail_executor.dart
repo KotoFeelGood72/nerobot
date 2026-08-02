@@ -1,8 +1,8 @@
-// chats_screen.dart
 import 'package:auto_route/auto_route.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
+import 'package:intl/intl.dart';
 import 'package:nerobot/components/ui/Btn.dart';
 import 'package:nerobot/components/ui/Divider.dart';
 import 'package:nerobot/components/ui/info_row.dart';
@@ -20,232 +20,218 @@ class TaskDetailExecutorScreen extends StatefulWidget {
 }
 
 class _TaskDetailExecutorScreenState extends State<TaskDetailExecutorScreen> {
-  Map<String, dynamic>? task;
-  bool isLoading = true;
-
   String get _uid => FirebaseAuth.instance.currentUser?.uid ?? '';
 
-  /// Проверка, является ли текущий пользователь исполнителем
-  bool get _iAmWorker {
-    final List workers = task?['workers'] ?? [];
-    return workers.contains(_uid);
+  bool _uidInList(dynamic list) {
+    if (_uid.isEmpty || list is! List) return false;
+    return list.any((e) => e?.toString() == _uid);
   }
 
-  /// Локальные флаги статусов
-  late String statusReadable;
-  bool isSearching = false;
-  bool isInWork = false;
-  bool isClosed = false;
+  bool _iAmWorker(Map<String, dynamic> task) =>
+      _uidInList(task['workers']);
 
-  /// Флаг: уже ли текущий пользователь оставлял отклик (есть ли он в массиве 'responses')
-  bool get _hasResponded {
-    final List responses = task?['responses'] ?? [];
-    return responses.contains(_uid);
-  }
+  bool _hasResponded(Map<String, dynamic> task) =>
+      _uidInList(task['responses']);
 
-  @override
-  void initState() {
-    super.initState();
-    _loadTask();
-  }
-
-  Future<void> _loadTask() async {
-    final snap =
-        await FirebaseFirestore.instance
-            .collection('orders')
-            .doc(widget.taskId)
-            .get();
-
-    if (!mounted) return;
-
-    task = snap.data();
-    _computeStatus();
-    setState(() => isLoading = false);
-  }
-
-  /// Пересчитываем статус (по наличию исполнителей и дате закрытия)
-  void _computeStatus() {
-    final hasClosed = task?['closed_date'] != null;
-    final hasWorkers = (task?['workers'] ?? []).isNotEmpty;
+  ({String label, bool searching, bool inWork, bool closed}) _statusOf(
+    Map<String, dynamic> task,
+  ) {
+    final status = task['status']?.toString();
+    final hasClosed =
+        task['closed_date'] != null ||
+        status == 'success' ||
+        status == 'done' ||
+        status == 'cancelled';
+    final hasWorkers = (task['workers'] is List) &&
+        (task['workers'] as List).isNotEmpty;
 
     if (hasClosed) {
-      statusReadable = 'Завершено';
-      isClosed = true;
-    } else if (hasWorkers) {
-      statusReadable = 'В работе';
-      isInWork = true;
-    } else {
-      statusReadable = 'Поиск исполнителя';
-      isSearching = true;
+      return (label: 'Завершено', searching: false, inWork: false, closed: true);
     }
+    if (status == 'preview') {
+      return (label: 'На проверке', searching: false, inWork: true, closed: false);
+    }
+    if (hasWorkers || status == 'working') {
+      return (label: 'В работе', searching: false, inWork: true, closed: false);
+    }
+    return (
+      label: 'Поиск исполнителя',
+      searching: true,
+      inWork: false,
+      closed: false,
+    );
   }
 
-  /// Новый метод: обновляет статус документа заказа на "preview"
+  String _formatTimestamp(dynamic raw) {
+    final millis = raw is num
+        ? raw.toInt()
+        : int.tryParse(raw?.toString() ?? '');
+    if (millis == null || millis <= 0) return '—';
+    final dt = DateTime.fromMillisecondsSinceEpoch(millis).toLocal();
+    return DateFormat('dd.MM.yyyy HH:mm').format(dt);
+  }
+
   Future<void> _confirmExecution() async {
     try {
       await FirebaseFirestore.instance
           .collection('orders')
           .doc(widget.taskId)
           .update({'status': 'preview'});
-      // После успешного обновления можно вернуться назад
-      if (mounted) {
-        Navigator.of(context).pop(); // или любой другой навигационный шаг
-      }
+      if (mounted) Navigator.of(context).pop();
     } catch (e) {
-      // Обработайте ошибку по необходимости
+      if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(content: Text('Не удалось подтвердить выполнение: $e')),
       );
     }
   }
 
+  Future<void> _openResponse() async {
+    await openResponseModal(context, widget.taskId);
+    // Stream обновит UI; setState на случай если модалку закрыли без отклика
+    if (mounted) setState(() {});
+  }
+
   @override
   Widget build(BuildContext context) {
-    if (isLoading) {
-      return const Scaffold(body: Center(child: CircularProgressIndicator()));
-    }
-    if (task == null) {
-      return const Scaffold(body: Center(child: Text('Задание не найдено')));
-    }
-
-    // Короткие ссылки на списки внутри документа
-    final List addInfo = task!['additional'] ?? [];
-    final List workers = task!['workers'] ?? [];
-    final List responses = task!['responses'] ?? [];
-    final String currentStatus = task!['status'] as String;
-
     return Scaffold(
-      body: Container(
-        padding: const EdgeInsets.all(16),
-        decoration: const BoxDecoration(
-          color: AppColors.bg,
-          border: Border(top: BorderSide(color: AppColors.border)),
-        ),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.stretch,
-          children: [
-            //------------------ карточка ------------------
-            Container(
-              padding: const EdgeInsets.all(16),
-              decoration: BoxDecoration(
-                color: Colors.white,
-                borderRadius: BorderRadius.circular(12),
-                boxShadow: [
-                  BoxShadow(
-                    color: Colors.black12,
-                    blurRadius: 6,
-                    offset: const Offset(0, 2),
-                  ),
-                ],
-              ),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  // заголовок
-                  Text(
-                    task!['title'] ?? 'Без названия',
-                    style: const TextStyle(
-                      fontSize: 18,
-                      fontWeight: FontWeight.bold,
-                    ),
-                  ),
-                  const Square(),
-                  // описание
-                  Text(
-                    task!['description'] ?? '',
-                    style: const TextStyle(fontSize: 14, color: Colors.grey),
-                  ),
-                  const Square(height: 24),
-                  // основные данные
-                  InfoRow(
-                    label: 'Стоимость',
-                    value: '${task!['price']} ₽',
-                    hasTopBorder: true,
-                    hasBottomBorder: true,
-                  ),
-                  InfoRow(
-                    label: 'Дата начала',
-                    value: (task!['begin_at'] ?? '').toString(),
-                    hasBottomBorder: true,
-                  ),
-                  InfoRow(
-                    label: 'Адрес',
-                    value: task!['address'] ?? '',
-                    hasBottomBorder: true,
-                  ),
-                  InfoRow(
-                    label: 'Статус',
-                    value: statusReadable,
-                    hasBottomBorder: true,
-                  ),
-                  InfoRow(
-                    label: 'Отклики',
-                    value: '${responses.length}',
-                    hasBottomBorder: true,
-                  ),
-                ],
-              ),
+      body: StreamBuilder<DocumentSnapshot<Map<String, dynamic>>>(
+        stream: FirebaseFirestore.instance
+            .collection('orders')
+            .doc(widget.taskId)
+            .snapshots(),
+        builder: (context, snap) {
+          if (snap.connectionState == ConnectionState.waiting &&
+              !snap.hasData) {
+            return const Center(child: CircularProgressIndicator());
+          }
+          if (!snap.hasData || !snap.data!.exists) {
+            return const Center(child: Text('Задание не найдено'));
+          }
+
+          final task = snap.data!.data()!;
+          final responses = task['responses'] is List
+              ? task['responses'] as List
+              : const [];
+          final currentStatus = task['status']?.toString() ?? 'open';
+          final status = _statusOf(task);
+          final hasResponded = _hasResponded(task);
+          final iAmWorker = _iAmWorker(task);
+
+          return Container(
+            padding: const EdgeInsets.all(16),
+            decoration: const BoxDecoration(
+              color: AppColors.bg,
+              border: Border(top: BorderSide(color: AppColors.border)),
             ),
-
-            const Square(),
-            const Spacer(),
-
-            //------------------ actions -------------------
-
-            // 1) Статус "Поиск исполнителя":
-            //    показываем кнопки «Отказаться/Согласиться», но только если текущий пользователь
-            //    еще не отправлял отклик (!_hasResponded) и сам не является исполнителем.
-            if (isSearching && !_hasResponded && !_iAmWorker) ...[
-              Row(
-                children: [
-                  Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                Container(
+                  padding: const EdgeInsets.all(16),
+                  decoration: BoxDecoration(
+                    color: Colors.white,
+                    borderRadius: BorderRadius.circular(12),
+                    boxShadow: const [
+                      BoxShadow(
+                        color: Colors.black12,
+                        blurRadius: 6,
+                        offset: Offset(0, 2),
+                      ),
+                    ],
+                  ),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        task['title'] ?? 'Без названия',
+                        style: const TextStyle(
+                          fontSize: 18,
+                          fontWeight: FontWeight.bold,
+                        ),
+                      ),
+                      const Square(),
+                      Text(
+                        task['description'] ?? '',
+                        style: const TextStyle(fontSize: 14, color: Colors.grey),
+                      ),
+                      const Square(height: 24),
+                      InfoRow(
+                        label: 'Стоимость',
+                        value: '${task['price']} ₽',
+                        hasTopBorder: true,
+                        hasBottomBorder: true,
+                      ),
+                      InfoRow(
+                        label: 'Дата начала',
+                        value: _formatTimestamp(
+                          task['deadline'] ?? task['begin_at'],
+                        ),
+                        hasBottomBorder: true,
+                      ),
+                      InfoRow(
+                        label: 'Адрес',
+                        value: task['address'] ?? '',
+                        hasBottomBorder: true,
+                      ),
+                      InfoRow(
+                        label: 'Статус',
+                        value: status.label,
+                        hasBottomBorder: true,
+                      ),
+                      InfoRow(
+                        label: 'Отклики',
+                        value: '${responses.length}',
+                        hasBottomBorder: true,
+                      ),
+                    ],
+                  ),
+                ),
+                const Square(),
+                const Spacer(),
+                if (status.searching && !hasResponded && !iAmWorker)
+                  Row(
+                    children: [
+                      Expanded(
+                        child: Btn(
+                          text: 'Отказаться',
+                          theme: 'secondary',
+                          onPressed: () => Navigator.of(context).pop(),
+                        ),
+                      ),
+                      const SizedBox(width: 16),
+                      Expanded(
+                        child: Btn(
+                          text: 'Согласиться',
+                          theme: 'primary',
+                          onPressed: _openResponse,
+                        ),
+                      ),
+                    ],
+                  )
+                else if (status.inWork &&
+                    iAmWorker &&
+                    currentStatus != 'success')
+                  SizedBox(
+                    width: double.infinity,
                     child: Btn(
-                      text: 'Отказаться',
-                      theme: 'white',
-                      onPressed: () {
-                        Navigator.of(context).pop();
-                      },
+                      text: 'Подтвердить выполнение',
+                      theme: 'primary',
+                      onPressed: _confirmExecution,
+                    ),
+                  )
+                else if (status.searching && hasResponded)
+                  Center(
+                    child: Text(
+                      'Вы уже отправили отклик',
+                      style: TextStyle(color: Colors.grey[600]),
                     ),
                   ),
-                  const SizedBox(width: 16),
-                  Expanded(
-                    child: Btn(
-                      text: 'Согласиться',
-                      theme: 'violet',
-                      onPressed:
-                          () => openResponseModal(context, widget.taskId),
-                    ),
-                  ),
-                ],
-              ),
-            ]
-            // 2) Если статус «В работе» и текущий пользователь — назначенный исполнитель,
-            //    показываем кнопку «Подтвердить выполнение»
-            else if (isInWork && _iAmWorker && currentStatus != 'success') ...[
-              SizedBox(
-                width: double.infinity,
-                child: Btn(
-                  text: 'Подтвердить выполнение',
-                  theme: 'violet',
-                  // вместо openResponseModal вызываем обновление статуса
-                  onPressed: _confirmExecution,
-                ),
-              ),
-            ]
-            // 3) Во всех остальных случаях (либо «Завершено», либо уже откликнулись) —
-            //    показываем поясняющий текст
-            else if (isSearching && _hasResponded) ...[
-              Center(
-                child: Text(
-                  'Вы уже отправили отклик',
-                  style: TextStyle(color: Colors.grey[600]),
-                ),
-              ),
-            ],
-
-            const Square(height: 32),
-          ],
-        ),
+                const Square(height: 32),
+              ],
+            ),
+          );
+        },
       ),
     );
   }

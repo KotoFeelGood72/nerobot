@@ -140,7 +140,7 @@ class _VacansyDetailScreenState extends State<VacansyDetailScreen> {
             if (phone.isNotEmpty)
               Btn(
                 text: 'Позвонить',
-                theme: 'violet',
+                theme: 'primary',
                 onPressed: () => _makePhoneCall(phone),
               )
             else

@@ -1,5 +1,3 @@
-import 'dart:io';
-
 import 'package:auto_route/auto_route.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
@@ -9,6 +7,8 @@ import 'package:flutter_masked_text2/flutter_masked_text2.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:nerobot/components/ui/Btn.dart';
 import 'package:nerobot/components/ui/Inputs.dart';
+import 'package:nerobot/components/ui/app_form_field.dart';
+import 'package:nerobot/components/ui/user_avatar.dart';
 import 'package:nerobot/constants/app_colors.dart';
 import 'package:nerobot/router/app_router.gr.dart';
 import 'package:nerobot/utils/clean_phone.dart';
@@ -268,21 +268,70 @@ class _ProfileEditScreenState extends State<ProfileEditScreen> {
   }
 
   Future<void> _deletePhoto() async {
+    final uid = userId;
+    final previousUrl = photoUrl;
     setState(() => photoUrl = null);
+
+    if (uid == null) return;
+    try {
+      await FirebaseStorage.instance.ref('user_photos/$uid.jpg').delete();
+    } on FirebaseException catch (e) {
+      // Уже нет файла — не ошибка для UI
+      if (e.code != 'object-not-found') {
+        debugPrint('delete photo: ${e.code} ${e.message}');
+      }
+    } catch (e) {
+      debugPrint('delete photo: $e');
+    }
+    debugPrint('photo cleared (was: $previousUrl)');
   }
 
   Future<void> _pickAndUploadPhoto() async {
     final picker = ImagePicker();
-    final XFile? image = await picker.pickImage(source: ImageSource.gallery);
+    final XFile? image = await picker.pickImage(
+      source: ImageSource.gallery,
+      maxWidth: 1200,
+      maxHeight: 1200,
+      imageQuality: 85,
+    );
     if (image == null || userId == null) return;
 
     setState(() => _inProcess = true);
 
     try {
-      final ref = FirebaseStorage.instance.ref('user_photos/$userId.jpg');
-      await ref.putFile(File(image.path));
+      final bytes = await image.readAsBytes();
+      if (bytes.isEmpty) {
+        throw Exception('Пустой файл изображения');
+      }
+
+      final contentType = image.mimeType?.startsWith('image/') == true
+          ? image.mimeType!
+          : 'image/jpeg';
+
+      final ref = FirebaseStorage.instance.ref('user_photos/${userId!}.jpg');
+      await ref.putData(
+        bytes,
+        SettableMetadata(contentType: contentType),
+      );
       final downloadUrl = await ref.getDownloadURL();
       if (mounted) setState(() => photoUrl = downloadUrl);
+    } on FirebaseException catch (e) {
+      debugPrint('❌ upload photo: ${e.code} ${e.message}');
+      if (!mounted) return;
+      final message = switch (e.code) {
+        'unauthorized' || 'permission-denied' =>
+          'Нет доступа к Storage. Проверьте правила Firebase Storage.',
+        'object-not-found' =>
+          'Firebase Storage не настроен. Откройте консоль Firebase → Storage → Get Started.',
+        _ => 'Не удалось загрузить фото: ${e.message ?? e.code}',
+      };
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(message)));
+    } catch (e) {
+      debugPrint('❌ upload photo: $e');
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Не удалось загрузить фото: $e')),
+      );
     } finally {
       if (mounted) setState(() => _inProcess = false);
     }
@@ -301,20 +350,17 @@ class _ProfileEditScreenState extends State<ProfileEditScreen> {
       appBar: AppBar(title: const Text('Редактирование')),
       body: Stack(
         children: [
-          Padding(
-            padding: const EdgeInsets.all(16.0),
-            child: ListView(
-              children: [
+          SafeArea(
+            child: Padding(
+              padding: const EdgeInsets.fromLTRB(16, 16, 16, 8),
+              child: ListView(
+                children: [
                 SizedBox(
                   width: 50,
                   child: Stack(
                     alignment: Alignment.center,
                     children: [
-                      CircleAvatar(
-                        radius: 50,
-                        backgroundColor: Colors.grey[200],
-                        backgroundImage: _getImageProvider(photoUrl),
-                      ),
+                      UserAvatar(imageUrl: photoUrl, radius: 50),
                       Positioned(
                         top: 0,
                         right: 120,
@@ -388,9 +434,10 @@ class _ProfileEditScreenState extends State<ProfileEditScreen> {
                 Btn(
                   text: 'Подтвердить',
                   onPressed: _updateUserProfile,
-                  theme: 'violet',
+                  theme: 'primary',
                 ),
               ],
+            ),
             ),
           ),
 
@@ -409,15 +456,6 @@ class _ProfileEditScreenState extends State<ProfileEditScreen> {
     );
   }
 
-  ImageProvider _getImageProvider(String? imageUrl) {
-    if (imageUrl != null &&
-        imageUrl.isNotEmpty &&
-        Uri.tryParse(imageUrl)?.hasAbsolutePath == true) {
-      return NetworkImage(imageUrl);
-    }
-    return const AssetImage('assets/images/splash.png');
-  }
-
   Widget _buildCityDropdown() {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
@@ -433,35 +471,22 @@ class _ProfileEditScreenState extends State<ProfileEditScreen> {
             ),
           ),
         ),
-        Container(
-          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
-          decoration: BoxDecoration(
-            color: AppColors.ulight,
-            borderRadius: BorderRadius.circular(8),
-            border: Border.all(color: AppColors.border),
-          ),
-          child: DropdownButtonHideUnderline(
-            child: DropdownButton<String>(
-              value: selectedCity,
-              isExpanded: true,
-              icon: const Icon(Icons.arrow_drop_down, color: Colors.black),
-              style: const TextStyle(color: Colors.black, fontSize: 16),
-              items:
-                  cities.map<DropdownMenuItem<String>>((String city) {
-                    return DropdownMenuItem<String>(
-                      value: city,
-                      child: Text(city),
-                    );
-                  }).toList(),
-              onChanged: (String? newValue) {
-                if (newValue != null) {
-                  setState(() {
-                    selectedCity = newValue;
-                  });
-                }
-              },
-            ),
-          ),
+        AppDropdown<String>(
+          value: selectedCity,
+          iconColor: AppColors.black,
+          items: cities
+              .map(
+                (city) => DropdownMenuItem<String>(
+                  value: city,
+                  child: Text(city),
+                ),
+              )
+              .toList(),
+          onChanged: (String? newValue) {
+            if (newValue != null) {
+              setState(() => selectedCity = newValue);
+            }
+          },
         ),
       ],
     );

@@ -120,7 +120,7 @@ Future<DateTime?> pickDate(
                   width: double.infinity,
                   child: Btn(
                     text: 'Готово',
-                    theme: 'violet',
+                    theme: 'primary',
                     onPressed: () {
                       Navigator.pop(context, tempPickedDate);
                     },

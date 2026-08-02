@@ -11,6 +11,42 @@ class WelcomeScreen extends StatelessWidget {
     AutoRouter.of(context).push(AuthRoute(role: role));
   }
 
+  Future<void> _showLoginRolePicker(BuildContext context) async {
+    final role = await showModalBottomSheet<String>(
+      context: context,
+      builder: (ctx) => Padding(
+        padding: const EdgeInsets.all(24),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            const Text(
+              'Войти как',
+              style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
+              textAlign: TextAlign.center,
+            ),
+            const SizedBox(height: 16),
+            Btn(
+              text: 'Заказчик',
+              theme: 'primary',
+              onPressed: () => Navigator.pop(ctx, 'customer'),
+            ),
+            const SizedBox(height: 8),
+            Btn(
+              text: 'Исполнитель',
+              theme: 'secondary',
+              onPressed: () => Navigator.pop(ctx, 'worker'),
+            ),
+          ],
+        ),
+      ),
+    );
+
+    if (role != null && context.mounted) {
+      await _setRoleAndNavigate(context, role);
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
@@ -44,7 +80,7 @@ class WelcomeScreen extends StatelessWidget {
                     width: double.infinity,
                     child: Btn(
                       text: 'Найти исполнителя',
-                      theme: 'violet',
+                      theme: 'primary',
                       onPressed: () => _setRoleAndNavigate(context, 'customer'),
                     ),
                   ),
@@ -53,7 +89,7 @@ class WelcomeScreen extends StatelessWidget {
                     width: double.infinity,
                     child: Btn(
                       text: 'Стать исполнителем',
-                      theme: 'light',
+                      theme: 'secondary',
                       onPressed: () => _setRoleAndNavigate(context, 'worker'),
                     ),
                   ),
@@ -64,10 +100,8 @@ class WelcomeScreen extends StatelessWidget {
               width: double.infinity,
               child: Btn(
                 text: 'Войти в аккаунт',
-                theme: 'white',
-                onPressed:
-                    () =>
-                        AutoRouter.of(context).push(AuthRoute(role: 'worker')),
+                theme: 'secondary',
+                onPressed: () => _showLoginRolePicker(context),
               ),
             ),
             const SizedBox(height: 30),

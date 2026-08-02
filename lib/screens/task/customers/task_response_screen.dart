@@ -34,9 +34,12 @@ class TaskResponseScreen extends StatelessWidget {
         final userDoc = await usersRef.doc(userId).get();
         final userData = userDoc.data() ?? {};
 
-        // Запрос чата по order_id
-        final chatQuerySnapshot =
-            await chatsRef.where('order_id', isEqualTo: taskId).limit(1).get();
+        // Запрос чата по order_id и участнику-исполнителю
+        final chatQuerySnapshot = await chatsRef
+            .where('order_id', isEqualTo: taskId)
+            .where('participants', arrayContains: userId)
+            .limit(1)
+            .get();
 
         String chatId = '';
         if (chatQuerySnapshot.docs.isNotEmpty) {
@@ -45,7 +48,8 @@ class TaskResponseScreen extends StatelessWidget {
 
         return {
           'photo': userData['image_url'] as String? ?? '',
-          'firstName': userData['firstName'] as String? ?? '',
+          'firstName': userData['firstName'] as String? ??
+              (userData['name'] as String? ?? '').split(' ').first,
           'lastName': userData['lastName'] as String? ?? '',
           'created_at': _formatDate(data['created_time']),
           'rating': data['respondent_rating'] as int? ?? 0,
@@ -146,10 +150,18 @@ class TaskResponseScreen extends StatelessWidget {
 
               return GestureDetector(
                 onTap: () {
-                  // При клике открываем чат по соответствующему roomUUID
+                  final chatId = (response['roomUUID'] as String?)?.trim() ?? '';
+                  if (chatId.isEmpty) {
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      const SnackBar(
+                        content: Text('Чат ещё не создан для этого отклика'),
+                      ),
+                    );
+                    return;
+                  }
                   AutoRouter.of(context).push(
                     ChatsRoute(
-                      chatsId: response['roomUUID'] as String,
+                      chatsId: chatId,
                       taskId: taskId,
                     ),
                   );

@@ -117,7 +117,7 @@ class _TaskDetailCustomerScreenState extends State<TaskDetailCustomerScreen> {
                   Expanded(
                     child: Btn(
                       text: 'Отмена',
-                      theme: 'white',
+                      theme: 'secondary',
                       onPressed: () => Navigator.of(context).pop(),
                     ),
                   ),
@@ -125,7 +125,7 @@ class _TaskDetailCustomerScreenState extends State<TaskDetailCustomerScreen> {
                   Expanded(
                     child: Btn(
                       text: 'Подтвердить',
-                      theme: 'violet',
+                      theme: 'primary',
                       onPressed: () async {
                         try {
                           await _sendTaskResponse(responseController.text);
@@ -314,13 +314,13 @@ class _TaskDetailCustomerScreenState extends State<TaskDetailCustomerScreen> {
                   if (widget.respondent != null && !hasExecutor) ...[
                     Btn(
                       text: 'Утвердить исполнителя',
-                      theme: 'violet',
+                      theme: 'primary',
                       onPressed: _confirmWorker,
                     ),
                   ] else if (hasExecutor) ...[
                     Btn(
                       text: 'Подтвердить выполнение',
-                      theme: 'violet',
+                      theme: 'primary',
                       onPressed: _confirmSuccess,
                     ),
                   ],

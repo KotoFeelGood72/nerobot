@@ -3,6 +3,7 @@ import 'package:geolocator/geolocator.dart';
 import 'package:latlong2/latlong.dart';
 import 'package:nerobot/components/ui/Btn.dart';
 import 'package:nerobot/components/ui/Inputs.dart';
+import 'package:nerobot/components/ui/app_form_field.dart';
 import 'package:nerobot/constants/app_colors.dart';
 import 'package:nerobot/utils/user_city_utils.dart';
 
@@ -23,7 +24,7 @@ class TaskFilters extends StatefulWidget {
 class _TaskFiltersState extends State<TaskFilters> {
   final _minPriceController = TextEditingController();
   String? _shiftType;
-  double _radiusKm = 5;
+  double _radiusKm = 50;
   LatLng? _userLocation;
 
   final List<String> _shiftOptions = [
@@ -125,7 +126,7 @@ class _TaskFiltersState extends State<TaskFilters> {
       setState(() {
         _minPriceController.clear();
         _shiftType = null;
-        _radiusKm = 5;
+        _radiusKm = 50;
         _sortBy = null;
       });
     }
@@ -135,7 +136,7 @@ class _TaskFiltersState extends State<TaskFilters> {
     setModalState(() {
       _minPriceController.clear();
       _shiftType = null;
-      _radiusKm = 5;
+      _radiusKm = 50;
       _sortBy = null;
     });
   }
@@ -170,7 +171,6 @@ class _TaskFiltersState extends State<TaskFilters> {
                     ),
                     const SizedBox(height: 16),
 
-                    // 💰 Минимальная цена
                     Inputs(
                       controller: _minPriceController,
                       backgroundColor: AppColors.ulight,
@@ -178,13 +178,12 @@ class _TaskFiltersState extends State<TaskFilters> {
                       label: 'Мин. цена',
                       fieldType: 'number',
                       maxLength: 9,
-                      fontSize: 12,
                     ),
 
                     const SizedBox(height: 16),
 
-                    // ⏱️ Период оплаты и Сортировка в одной строке
                     Row(
+                      crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
                         Expanded(
                           child: Column(
@@ -193,61 +192,26 @@ class _TaskFiltersState extends State<TaskFilters> {
                               const Text(
                                 "Тип оплаты",
                                 style: TextStyle(
-                                  fontSize: 12,
+                                  fontSize: 14,
                                   fontWeight: FontWeight.w500,
                                   color: AppColors.gray,
                                 ),
                               ),
-                              const SizedBox(height: 8),
-                              Container(
-                                padding: const EdgeInsets.symmetric(
-                                  horizontal: 12,
-                                ),
-                                decoration: BoxDecoration(
-                                  color: AppColors.ulight,
-                                  borderRadius: BorderRadius.circular(8),
-                                  border: Border.all(color: AppColors.border),
-                                ),
-                                child: DropdownButton<String>(
-                                  value: _shiftType,
-                                  isExpanded: true,
-                                  underline: const SizedBox(),
-                                  icon: const Icon(
-                                    Icons.arrow_drop_down,
-                                    color: AppColors.gray,
-                                  ),
-                                  hint: const Text(
-                                    "Тип оплаты",
-                                    style: TextStyle(
-                                      color: AppColors.gray,
-                                      fontSize: 12,
-                                    ),
-                                  ),
-                                  items:
-                                      _shiftOptions
-                                          .map(
-                                            (label) => DropdownMenuItem<String>(
-                                              value: label,
-                                              child: Text(
-                                                label,
-                                                style: const TextStyle(
-                                                  color: AppColors.black,
-                                                  fontSize: 12,
-                                                ),
-                                              ),
-                                            ),
-                                          )
-                                          .toList(),
-                                  onChanged: (value) {
-                                    print('Выбрана оплата: $value');
-                                    setModalState(() {
-                                      _shiftType = value;
-                                      print(
-                                        'Обновлено _shiftType: $_shiftType',
-                                      );
-                                    });
-                                  },
-                                ),
+                              const SizedBox(height: 4),
+                              AppDropdown<String>(
+                                value: _shiftType,
+                                hint: "Тип оплаты",
+                                items: _shiftOptions
+                                    .map(
+                                      (label) => DropdownMenuItem<String>(
+                                        value: label,
+                                        child: Text(label),
+                                      ),
+                                    )
+                                    .toList(),
+                                onChanged: (value) {
+                                  setModalState(() => _shiftType = value);
+                                },
                               ),
                             ],
                           ),
@@ -260,59 +224,26 @@ class _TaskFiltersState extends State<TaskFilters> {
                               const Text(
                                 "Сортировка",
                                 style: TextStyle(
-                                  fontSize: 12,
+                                  fontSize: 14,
                                   fontWeight: FontWeight.w500,
                                   color: AppColors.gray,
                                 ),
                               ),
-                              const SizedBox(height: 8),
-                              Container(
-                                padding: const EdgeInsets.symmetric(
-                                  horizontal: 12,
-                                ),
-                                decoration: BoxDecoration(
-                                  color: AppColors.ulight,
-                                  borderRadius: BorderRadius.circular(8),
-                                  border: Border.all(color: AppColors.border),
-                                ),
-                                child: DropdownButton<String>(
-                                  value: _sortBy,
-                                  isExpanded: true,
-                                  underline: const SizedBox(),
-                                  icon: const Icon(
-                                    Icons.arrow_drop_down,
-                                    color: AppColors.gray,
-                                  ),
-                                  hint: const Text(
-                                    "Сортировка",
-                                    style: TextStyle(
-                                      color: AppColors.gray,
-                                      fontSize: 12,
-                                    ),
-                                  ),
-                                  items:
-                                      _sortOptions
-                                          .map(
-                                            (label) => DropdownMenuItem<String>(
-                                              value: label,
-                                              child: Text(
-                                                label,
-                                                style: const TextStyle(
-                                                  color: AppColors.black,
-                                                  fontSize: 12,
-                                                ),
-                                              ),
-                                            ),
-                                          )
-                                          .toList(),
-                                  onChanged: (value) {
-                                    print('Выбрана сортировка: $value');
-                                    setModalState(() {
-                                      _sortBy = value;
-                                      print('Обновлено _sortBy: $_sortBy');
-                                    });
-                                  },
-                                ),
+                              const SizedBox(height: 4),
+                              AppDropdown<String>(
+                                value: _sortBy,
+                                hint: "Сортировка",
+                                items: _sortOptions
+                                    .map(
+                                      (label) => DropdownMenuItem<String>(
+                                        value: label,
+                                        child: Text(label),
+                                      ),
+                                    )
+                                    .toList(),
+                                onChanged: (value) {
+                                  setModalState(() => _sortBy = value);
+                                },
                               ),
                             ],
                           ),
@@ -336,58 +267,88 @@ class _TaskFiltersState extends State<TaskFilters> {
                             ),
                           ),
                           const SizedBox(height: 8),
-                          Slider(
-                            value: _radiusKm,
-                            min: 1,
-                            max: 50,
-                            divisions: 49,
-                            label: "${_radiusKm.round()} км",
-                            onChanged: (value) {
-                              print('Изменен радиус: $value км');
-                              print('До setModalState _radiusKm: $_radiusKm');
-                              setModalState(() {
-                                _radiusKm = value;
-                                print(
-                                  'Внутри setModalState _radiusKm: $_radiusKm',
-                                );
-                              });
-                              print(
-                                'После setModalState _radiusKm: $_radiusKm',
+                          LayoutBuilder(
+                            builder: (context, constraints) {
+                              const min = 1.0;
+                              const max = 50.0;
+                              // Горизонтальные отступы трека Slider ≈ половины thumb
+                              const sideInset = 24.0;
+                              final trackWidth =
+                                  (constraints.maxWidth - sideInset)
+                                      .clamp(0.0, double.infinity);
+                              final t = (_radiusKm - min) / (max - min);
+                              final thumbCenterX = sideInset / 2 + t * trackWidth;
+                              final label = '${_radiusKm.round()} км';
+
+                              return Column(
+                                children: [
+                                  SizedBox(
+                                    height: 22,
+                                    width: double.infinity,
+                                    child: Stack(
+                                      clipBehavior: Clip.none,
+                                      children: [
+                                        Positioned(
+                                          left: (thumbCenterX - 28).clamp(
+                                            0.0,
+                                            constraints.maxWidth - 56,
+                                          ),
+                                          child: SizedBox(
+                                            width: 56,
+                                            child: Text(
+                                              label,
+                                              textAlign: TextAlign.center,
+                                              style: const TextStyle(
+                                                fontSize: 12,
+                                                fontWeight: FontWeight.w600,
+                                                color: AppColors.violet,
+                                              ),
+                                            ),
+                                          ),
+                                        ),
+                                      ],
+                                    ),
+                                  ),
+                                  SliderTheme(
+                                    data: SliderTheme.of(context).copyWith(
+                                      showValueIndicator:
+                                          ShowValueIndicator.never,
+                                    ),
+                                    child: Slider(
+                                      value: _radiusKm,
+                                      min: min,
+                                      max: max,
+                                      divisions: 49,
+                                      activeColor: AppColors.violet,
+                                      onChanged: (value) {
+                                        setModalState(() => _radiusKm = value);
+                                      },
+                                    ),
+                                  ),
+                                ],
                               );
                             },
-                          ),
-                          Padding(
-                            padding: const EdgeInsets.only(top: 4),
-                            child: Text(
-                              'Текущий радиус: ${_radiusKm.round()} км (значение: $_radiusKm)',
-                              style: const TextStyle(
-                                fontSize: 12,
-                                color: AppColors.gray,
-                              ),
-                            ),
                           ),
                         ],
                       ),
 
                     const SizedBox(height: 16),
 
-                    // Кнопки Применить и Сбросить
                     Row(
-                      spacing: 8,
                       children: [
                         Expanded(
                           child: Btn(
                             text: 'Сбросить',
-                            theme: 'light',
+                            theme: 'secondary',
                             onPressed:
                                 () => _resetFiltersInModal(setModalState),
                           ),
                         ),
-                        const SizedBox(height: 12),
+                        const SizedBox(width: 8),
                         Expanded(
                           child: Btn(
                             text: 'Применить',
-                            theme: 'violet',
+                            theme: 'primary',
                             onPressed: _applyFilters,
                           ),
                         ),

@@ -45,12 +45,22 @@ android {
         create("release") {
             val keystoreProps = Properties()
             val propsFile = rootProject.file("key.properties")
-            if (propsFile.exists()) {
-                keystoreProps.load(FileInputStream(propsFile))
-                storeFile = rootProject.file(keystoreProps.getProperty("storeFile"))
-                storePassword = keystoreProps.getProperty("storePassword")
-                keyAlias = keystoreProps.getProperty("keyAlias")
-                keyPassword = keystoreProps.getProperty("keyPassword")
+            if (!propsFile.exists()) {
+                throw GradleException(
+                    "Release signing is not configured. Create android/key.properties " +
+                        "(see android/key.properties.example)."
+                )
+            }
+            keystoreProps.load(FileInputStream(propsFile))
+            val storePath = keystoreProps.getProperty("storeFile")
+                ?: throw GradleException("storeFile is missing in android/key.properties")
+            val keystoreFile = rootProject.file(storePath)
+            storeFile = keystoreFile
+            storePassword = keystoreProps.getProperty("storePassword")
+            keyAlias = keystoreProps.getProperty("keyAlias")
+            keyPassword = keystoreProps.getProperty("keyPassword")
+            if (!keystoreFile.exists()) {
+                throw GradleException("Keystore not found: ${keystoreFile.absolutePath}")
             }
         }
     }

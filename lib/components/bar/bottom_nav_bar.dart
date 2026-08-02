@@ -9,6 +9,8 @@ class BottomNavBar extends StatelessWidget {
   /// Показывать ли центральную кнопку «Создать заказ» (для заказчиков).
   final bool showCreateButton;
 
+  static const double _barHeight = 48;
+
   const BottomNavBar({super.key, this.showCreateButton = false});
 
   @override
@@ -19,7 +21,7 @@ class BottomNavBar extends StatelessWidget {
     return _buildStandardBar(context);
   }
 
-  Widget _buildCustomBarWithCenterButton(BuildContext context) {
+  Widget _buildBarShell({required Widget child}) {
     return Container(
       decoration: BoxDecoration(
         color: AppColors.white,
@@ -32,124 +34,102 @@ class BottomNavBar extends StatelessWidget {
         ],
       ),
       child: SafeArea(
-        child: SizedBox(
-          height: 56,
-          child: Row(
-            children: [
-              Expanded(
-                child: InkWell(
-                  onTap: () => context.router.push(const TaskRoute()),
-                  child: Column(
-                    mainAxisAlignment: MainAxisAlignment.center,
-                    children: [
-                      IconWidget(
-                        iconName: 'case',
-                        color: AppColors.violet,
-                        size: 25,
-                      ),
-                      const SizedBox(height: 4),
-                      Text(
-                        'Задания',
-                        style: TextStyle(
-                          fontSize: 12,
-                          color: AppColors.violet,
-                          fontWeight: FontWeight.w500,
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
+        top: false,
+        child: SizedBox(height: _barHeight, child: child),
+      ),
+    );
+  }
+
+  Widget _navItem({
+    required String iconName,
+    required String label,
+    required Color color,
+    required VoidCallback onTap,
+  }) {
+    return Expanded(
+      child: InkWell(
+        onTap: onTap,
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            IconWidget(iconName: iconName, color: color, size: 22),
+            const SizedBox(height: 2),
+            Text(
+              label,
+              style: TextStyle(
+                fontSize: 11,
+                color: color,
+                fontWeight: FontWeight.w500,
+                height: 1.1,
               ),
-              SizedBox(
-                width: 64,
-                child: Transform.translate(
-                  offset: const Offset(0, -12),
-                  child: Material(
-                    color: AppColors.violet,
-                    shape: const CircleBorder(),
-                    elevation: 4,
-                    shadowColor: AppColors.violet.withValues(alpha: 0.4),
-                    child: InkWell(
-                      customBorder: const CircleBorder(),
-                      onTap: () =>
-                          context.router.push(const NewTaskCreateRoute()),
-                      child: const SizedBox(
-                        width: 56,
-                        height: 56,
-                        child: Icon(Icons.add, color: Colors.white, size: 28),
-                      ),
-                    ),
-                  ),
-                ),
-              ),
-              Expanded(
-                child: InkWell(
-                  onTap: () => context.router.push(ProfileRoute()),
-                  child: Column(
-                    mainAxisAlignment: MainAxisAlignment.center,
-                    children: [
-                      IconWidget(
-                        iconName: 'settings',
-                        color: AppColors.light,
-                        size: 25,
-                      ),
-                      const SizedBox(height: 4),
-                      Text(
-                        'Аккаунт',
-                        style: TextStyle(
-                          fontSize: 12,
-                          color: AppColors.light,
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
-              ),
-            ],
-          ),
+            ),
+          ],
         ),
       ),
     );
   }
 
-  Widget _buildStandardBar(BuildContext context) {
-    return BottomNavigationBar(
-      backgroundColor: AppColors.white,
-      type: BottomNavigationBarType.fixed,
-      selectedItemColor: AppColors.violet,
-      unselectedItemColor: AppColors.light,
-      selectedFontSize: 12,
-      unselectedFontSize: 12,
-      showUnselectedLabels: true,
-      items: const [
-        BottomNavigationBarItem(
-          icon: IconWidget(iconName: 'case', color: AppColors.gray, size: 25),
-          activeIcon: IconWidget(
+  Widget _buildCustomBarWithCenterButton(BuildContext context) {
+    return _buildBarShell(
+      child: Row(
+        children: [
+          _navItem(
             iconName: 'case',
+            label: 'Задания',
             color: AppColors.violet,
-            size: 25,
+            onTap: () => context.router.push(const TaskRoute()),
           ),
-          label: 'Задания',
-        ),
-        BottomNavigationBarItem(
-          icon: IconWidget(
+          SizedBox(
+            width: 56,
+            child: Transform.translate(
+              offset: const Offset(0, -10),
+              child: Material(
+                color: AppColors.violet,
+                shape: const CircleBorder(),
+                elevation: 4,
+                shadowColor: AppColors.violet.withValues(alpha: 0.4),
+                child: InkWell(
+                  customBorder: const CircleBorder(),
+                  onTap: () =>
+                      context.router.push(const NewTaskCreateRoute()),
+                  child: const SizedBox(
+                    width: 48,
+                    height: 48,
+                    child: Icon(Icons.add, color: Colors.white, size: 26),
+                  ),
+                ),
+              ),
+            ),
+          ),
+          _navItem(
             iconName: 'settings',
-            color: AppColors.gray,
-            size: 25,
+            label: 'Аккаунт',
+            color: AppColors.light,
+            onTap: () => context.router.push(ProfileRoute()),
           ),
-          label: 'Аккаунт',
-        ),
-      ],
-      onTap: (index) {
-        switch (index) {
-          case 0:
-            context.router.push(const TaskRoute());
-            break;
-          case 1:
-            context.router.push(ProfileRoute());
-            break;
-        }
-      },
+        ],
+      ),
+    );
+  }
+
+  Widget _buildStandardBar(BuildContext context) {
+    return _buildBarShell(
+      child: Row(
+        children: [
+          _navItem(
+            iconName: 'case',
+            label: 'Задания',
+            color: AppColors.violet,
+            onTap: () => context.router.push(const TaskRoute()),
+          ),
+          _navItem(
+            iconName: 'settings',
+            label: 'Аккаунт',
+            color: AppColors.light,
+            onTap: () => context.router.push(ProfileRoute()),
+          ),
+        ],
+      ),
     );
   }
 }

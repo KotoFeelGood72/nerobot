@@ -6,11 +6,11 @@ import 'package:flutter/material.dart';
 import 'package:nerobot/components/list/profile_list.dart';
 import 'package:nerobot/components/ui/Btn.dart';
 import 'package:nerobot/components/ui/Divider.dart';
+import 'package:nerobot/components/ui/pill_tabs.dart';
 import 'package:nerobot/constants/app_colors.dart';
-import 'package:nerobot/models/subscription.dart';
 import 'package:nerobot/router/app_router.gr.dart';
 import 'package:nerobot/utils/role_manager.dart';
-import 'package:nerobot/utils/subscription_utils.dart';
+import 'package:nerobot/utils/push_token_manager.dart';
 
 @RoutePage()
 class ProfileScreen extends StatefulWidget {
@@ -24,9 +24,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
   String? role; // worker | customer
   bool isLoading = true;
 
-  bool? notifCandidate;
-  bool? notifCityTask;
-  Subscription? activeSubscription;
+  bool notificationsEnabled = true;
 
   final String? uid = FirebaseAuth.instance.currentUser?.uid;
 
@@ -44,15 +42,13 @@ class _ProfileScreenState extends State<ProfileScreen> {
           await FirebaseFirestore.instance.collection('users').doc(uid).get();
       final data = doc.data();
 
-      final subscription = await SubscriptionUtils.getActiveSubscription(uid!);
       final savedRole = await RoleManager.getRole();
+
+      final prefs = await PushTokenManager.loadPreferences();
 
       setState(() {
         role = (data?['type'] as String?) ?? savedRole ?? 'worker';
-        notifCandidate =
-            data?['notificationPreferences']?['candidate'] ?? false;
-        notifCityTask = data?['notificationPreferences']?['cityTask'] ?? false;
-        activeSubscription = subscription;
+        notificationsEnabled = prefs.values.any((enabled) => enabled);
         isLoading = false;
       });
     } catch (e) {
@@ -73,6 +69,10 @@ class _ProfileScreenState extends State<ProfileScreen> {
     unawaited(
       FirebaseFirestore.instance.collection('users').doc(uid).update({
         'type': newRole,
+      }).then((_) async {
+        final snap =
+            await FirebaseFirestore.instance.collection('users').doc(uid).get();
+        await PushTokenManager.syncTopicsFromUserData(snap.data());
       }),
     );
   }
@@ -89,24 +89,13 @@ class _ProfileScreenState extends State<ProfileScreen> {
     await _loadUserData();
   }
 
-  String get notificationSubtitle {
-    if (notifCandidate == true || notifCityTask == true) return 'Включены';
-    return 'Выключены';
-  }
-
-  String get subscriptionSubtitle {
-    if (activeSubscription == null) return 'Нет активной подписки';
-    if (activeSubscription!.status == 'cancelled') return 'Подписка отменена';
-    if (!activeSubscription!.isActive) return 'Подписка истекла';
-    return 'Истечёт через: ${activeSubscription!.remainingTimeText}';
-  }
+  String get notificationSubtitle =>
+      notificationsEnabled ? 'Включены' : 'Выключены';
 
   @override
   Widget build(BuildContext context) {
     if (isLoading) {
-      return const Scaffold(
-        body: Center(child: CircularProgressIndicator()),
-      );
+      return const Scaffold(body: Center(child: CircularProgressIndicator()));
     }
 
     return Scaffold(
@@ -127,42 +116,17 @@ class _ProfileScreenState extends State<ProfileScreen> {
         ],
       ),
 
-      body: Column(
+      body: SafeArea(
+        child: Column(
         children: [
           const SizedBox(height: 16),
 
-          // переключатель роли
           Padding(
             padding: const EdgeInsets.symmetric(horizontal: 16),
-            child: Container(
-              padding: const EdgeInsets.all(2),
-              decoration: BoxDecoration(
-                color: AppColors.ulight,
-                borderRadius: BorderRadius.circular(30),
-                border: Border.all(width: 1, color: AppColors.border),
-              ),
-              child: Row(
-                children: [
-                  Expanded(
-                    child: GestureDetector(
-                      onTap: () => _updateRole('worker'),
-                      child: _roleChip(
-                        active: role == 'worker',
-                        label: 'Я — исполнитель',
-                      ),
-                    ),
-                  ),
-                  Expanded(
-                    child: GestureDetector(
-                      onTap: () => _updateRole('customer'),
-                      child: _roleChip(
-                        active: role == 'customer',
-                        label: 'Я — заказчик',
-                      ),
-                    ),
-                  ),
-                ],
-              ),
+            child: PillTabs(
+              titles: const ['Я — исполнитель', 'Я — заказчик'],
+              selectedIndex: role == 'customer' ? 1 : 0,
+              onChanged: (i) => _updateRole(i == 0 ? 'worker' : 'customer'),
             ),
           ),
 
@@ -174,8 +138,8 @@ class _ProfileScreenState extends State<ProfileScreen> {
               options: [
                 ProfileOption(
                   title: 'Личные данные',
-                  onTap: () =>
-                      AutoRouter.of(context).push(ProfileUserDataRoute()),
+                  onTap:
+                      () => AutoRouter.of(context).push(ProfileUserDataRoute()),
                 ),
                 ProfileOption(
                   title: 'Рейтинг и отзывы',
@@ -185,24 +149,17 @@ class _ProfileScreenState extends State<ProfileScreen> {
                   title: 'Уведомления',
                   subtitle: notificationSubtitle,
                   onTap: () async {
-                    final result = await AutoRouter.of(context)
-                        .push(const ProfileNoteRoute());
+                    final result = await AutoRouter.of(
+                      context,
+                    ).push(const ProfileNoteRoute());
                     if (result == true) _loadUserData();
                   },
                 ),
                 ProfileOption(
-                  title: 'Подписка',
-                  subtitle: subscriptionSubtitle,
-                  onTap: () async {
-                    await AutoRouter.of(context)
-                        .push(ProfileSubscriptionRoute());
-                    _loadUserData();
-                  },
-                ),
-                ProfileOption(
                   title: 'О приложении',
-                  onTap: () =>
-                      AutoRouter.of(context).push(const ProfileAppRoute()),
+                  onTap:
+                      () =>
+                          AutoRouter.of(context).push(const ProfileAppRoute()),
                 ),
                 ProfileOption(
                   title: 'Помощь',
@@ -213,36 +170,21 @@ class _ProfileScreenState extends State<ProfileScreen> {
           ),
 
           // кнопка выхода
-          Btn(
-            text: 'Выйти',
-            onPressed: _signOut,
-            theme: 'white',
-            textColor: AppColors.red,
+          Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 16),
+            child: Btn(
+              text: 'Выйти',
+              onPressed: _signOut,
+              theme: 'secondary',
+              textColor: AppColors.red,
+            ),
           ),
 
-          const Square(height: 30),
+          const Square(height: 16),
         ],
-      ),
-    );
-  }
-
-  // компонент чипа роли
-  Widget _roleChip({required bool active, required String label}) {
-    return Container(
-      padding: const EdgeInsets.symmetric(vertical: 10),
-      decoration: BoxDecoration(
-        color: active ? Colors.white : Colors.transparent,
-        borderRadius: BorderRadius.circular(30),
-      ),
-      child: Center(
-        child: Text(
-          label,
-          style: TextStyle(
-            fontWeight: FontWeight.bold,
-            color: active ? AppColors.violet : Colors.grey,
-          ),
         ),
       ),
     );
   }
+
 }

@@ -1,6 +1,14 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
+import 'package:flutter/foundation.dart';
 import 'package:latlong2/latlong.dart';
+import 'package:nerobot/utils/city_coordinates.dart';
+
+const _activeStatuses = ['open', 'working', 'preview'];
+const _historyStatuses = ['success', 'done', 'cancelled'];
+
+/// Радиус «весь город» по умолчанию (км).
+const defaultSearchRadiusKm = 50.0;
 
 Future<List<Map<String, dynamic>>> loadTasks({
   required String role,
@@ -10,140 +18,284 @@ Future<List<Map<String, dynamic>>> loadTasks({
   double? minPrice,
   double? maxPrice,
   double? radiusKm,
-  GeoPoint? userLocation,
+  LatLng? userLocation,
+  String? paymentFor,
+  String? sortBy,
 }) async {
-  Query query = FirebaseFirestore.instance.collection('orders');
+  final currentUserId = FirebaseAuth.instance.currentUser?.uid;
+  if (currentUserId == null) return [];
 
-  // --- БАЗОВЫЕ ФИЛЬТРЫ ---
-  query = query
-      .where('deleted', isEqualTo: false)
-      .where('active', isEqualTo: true);
-
-  // --- СТАТУС ---
-  if (currentFilter == 'open') {
-    query = query.where('status', isEqualTo: 'open');
-  } else if (currentFilter == 'history') {
-    query = query.where('status', whereIn: ['done', 'cancelled']);
-  }
-
-  // --- ФИЛЬТР ПО КООРДИНАТАМ ГОРОДА ДЛЯ ИСПОЛНИТЕЛЯ ---
   LatLng? userCityCoords;
-  String? currentUserId;
+  String? userCityName;
+
   if (role == 'worker') {
-    final uid = FirebaseAuth.instance.currentUser?.uid;
-    currentUserId = uid;
-
-    if (uid != null) {
-      final userSnap =
-          await FirebaseFirestore.instance.collection('users').doc(uid).get();
-
-      final userData = userSnap.data();
-
-      // Получаем координаты города пользователя
-      if (userData != null) {
-        final cityLat = userData['city_lat'];
-        final cityLng = userData['city_lng'];
-
-        if (cityLat != null && cityLng != null) {
-          userCityCoords = LatLng(
-            (cityLat is num)
-                ? cityLat.toDouble()
-                : double.tryParse(cityLat.toString()) ?? 0.0,
-            (cityLng is num)
-                ? cityLng.toDouble()
-                : double.tryParse(cityLng.toString()) ?? 0.0,
-          );
-        }
+    final userSnap = await FirebaseFirestore.instance
+        .collection('users')
+        .doc(currentUserId)
+        .get();
+    final userData = userSnap.data();
+    if (userData != null) {
+      userCityCoords = _readCityCoords(userData);
+      final cityName = userData['city'] ?? userData['selectedCity'];
+      if (cityName is String && cityName.isNotEmpty) {
+        userCityName = cityName;
+        userCityCoords ??= CityCoordinates.getCityCoordinates(cityName);
       }
     }
   }
 
-  // --- ФИЛЬТР ПО СОЗДАТЕЛЮ ДЛЯ ЗАКАЗЧИКА (без фильтрации по городу) ---
+  // Простые запросы без composite-индексов: сортировка и доп. фильтры на клиенте.
+  final docs = await _fetchOrderDocs(
+    role: role,
+    currentFilter: currentFilter,
+    uid: currentUserId,
+  );
+
+  var tasks = docs
+      .map((doc) => {...doc.data(), 'id': doc.id})
+      .toList();
+
+  tasks = tasks.where(_isVisibleOrder).toList();
+
   if (role == 'customer') {
-    final uid = FirebaseAuth.instance.currentUser?.uid;
-    currentUserId = uid;
-    if (uid != null) {
-      query = query.where('creator', isEqualTo: uid);
+    if (currentFilter == 'tasks') {
+      tasks = tasks
+          .where((t) => _activeStatuses.contains(t['status']?.toString()))
+          .toList();
+    } else if (currentFilter == 'history') {
+      tasks = tasks
+          .where((t) => _historyStatuses.contains(t['status']?.toString()))
+          .toList();
     }
   }
 
-  // --- ЦЕНА ---
+  if (role == 'worker') {
+    if (currentFilter == 'tasks') {
+      // «Новые» — только open, на которые ещё не откликались
+      tasks = tasks.where((t) {
+        if (t['status']?.toString() != 'open') return false;
+        if (_uidInList(t['responses'], currentUserId)) return false;
+        if (_uidInList(t['workers'], currentUserId)) return false;
+        return true;
+      }).toList();
+    } else if (currentFilter == 'open') {
+      // Откликнулся или уже назначен исполнителем, заказ ещё активен
+      tasks = tasks.where((task) {
+        final status = task['status']?.toString();
+        if (!_activeStatuses.contains(status)) return false;
+        return _uidInList(task['responses'], currentUserId) ||
+            _uidInList(task['workers'], currentUserId);
+      }).toList();
+    } else if (currentFilter == 'history') {
+      tasks = tasks.where((task) {
+        final status = task['status']?.toString();
+        if (!_historyStatuses.contains(status)) return false;
+        return _uidInList(task['workers'], currentUserId) ||
+            _uidInList(task['responses'], currentUserId);
+      }).toList();
+    }
+  }
+
   if (minPrice != null) {
-    query = query.where('price', isGreaterThanOrEqualTo: minPrice);
+    tasks = tasks.where((t) {
+      final p = t['price'];
+      final price = p is num ? p.toDouble() : double.tryParse('$p');
+      return price != null && price >= minPrice;
+    }).toList();
   }
 
   if (maxPrice != null) {
-    query = query.where('price', isLessThanOrEqualTo: maxPrice);
+    tasks = tasks.where((t) {
+      final p = t['price'];
+      final price = p is num ? p.toDouble() : double.tryParse('$p');
+      return price != null && price <= maxPrice;
+    }).toList();
   }
 
-  // --- ДАТА ---
   if (startDate != null) {
-    query = query.where(
-      'created_date',
-      isGreaterThanOrEqualTo: startDate.millisecondsSinceEpoch,
-    );
+    final startMs = startDate.millisecondsSinceEpoch;
+    tasks = tasks.where((t) {
+      final created = t['created_date'];
+      final ms = created is num ? created.toInt() : int.tryParse('$created') ?? 0;
+      return ms >= startMs;
+    }).toList();
   }
 
   if (endDate != null) {
-    query = query.where(
-      'created_date',
-      isLessThanOrEqualTo: endDate.millisecondsSinceEpoch,
+    final endMs = endDate.millisecondsSinceEpoch;
+    tasks = tasks.where((t) {
+      final created = t['created_date'];
+      final ms = created is num ? created.toInt() : int.tryParse('$created') ?? 0;
+      return ms <= endMs;
+    }).toList();
+  }
+
+  if (paymentFor != null && paymentFor.isNotEmpty) {
+    final wanted = paymentFor.toLowerCase();
+    tasks = tasks.where((t) {
+      final raw = t['payment_for']?.toString().toLowerCase() ?? '';
+      return raw == wanted;
+    }).toList();
+  }
+
+  final filterCenter = userCityCoords ?? userLocation;
+  final filterRadiusKm = radiusKm ?? defaultSearchRadiusKm;
+
+  if (role == 'worker' &&
+      currentFilter == 'tasks' &&
+      filterCenter != null) {
+    final before = tasks.length;
+    final distance = Distance();
+    final radiusMeters = filterRadiusKm * 1000;
+
+    tasks = tasks.where((task) {
+      final taskCoords = _readTaskCoords(task);
+      if (taskCoords != null) {
+        final distanceMeters = distance.as(
+          LengthUnit.Meter,
+          filterCenter,
+          taskCoords,
+        );
+        return distanceMeters <= radiusMeters;
+      }
+      if (userCityName != null) {
+        final taskCity = task['city']?.toString();
+        return taskCity != null &&
+            taskCity.isNotEmpty &&
+            taskCity.toLowerCase() == userCityName.toLowerCase();
+      }
+      return false;
+    }).toList();
+
+    debugPrint(
+      'radius filter: center=${filterCenter.latitude},${filterCenter.longitude} '
+      'r=${filterRadiusKm}km before=$before after=${tasks.length}',
     );
   }
 
-  query = query.orderBy('created_date', descending: true);
-
-  final snapshot = await query.get();
-
-  var tasks =
-      snapshot.docs
-          .map((doc) => {...doc.data() as Map<String, dynamic>, 'id': doc.id})
-          .toList();
-
-  // Фильтрация по координатам города для исполнителя - только во вкладке "Новые"
-  if (role == 'worker' && currentFilter == 'tasks' && userCityCoords != null) {
-    final distance = Distance();
-    // Радиус для определения одного города (примерно 50 км)
-    const cityRadiusMeters = 50000.0;
-
-    tasks =
-        tasks.where((task) {
-          final taskLat = task['lat'];
-          final taskLng = task['lng'];
-
-          if (taskLat == null || taskLng == null) {
-            return false;
-          }
-
-          final taskCoords = LatLng(
-            (taskLat is num)
-                ? taskLat.toDouble()
-                : double.tryParse(taskLat.toString()) ?? 0.0,
-            (taskLng is num)
-                ? taskLng.toDouble()
-                : double.tryParse(taskLng.toString()) ?? 0.0,
-          );
-
-          final distanceMeters = distance.as(
-            LengthUnit.Meter,
-            userCityCoords!,
-            taskCoords,
-          );
-
-          return distanceMeters <= cityRadiusMeters;
-        }).toList();
+  if (sortBy == 'По стоимости') {
+    tasks.sort((a, b) {
+      final ap = (a['price'] is num) ? (a['price'] as num).toDouble() : 0.0;
+      final bp = (b['price'] is num) ? (b['price'] as num).toDouble() : 0.0;
+      return ap.compareTo(bp);
+    });
+  } else {
+    tasks.sort((a, b) {
+      final ad = (a['created_date'] is num)
+          ? (a['created_date'] as num).toInt()
+          : 0;
+      final bd = (b['created_date'] is num)
+          ? (b['created_date'] as num).toInt()
+          : 0;
+      return bd.compareTo(ad);
+    });
   }
 
-  // Для вкладки "Открытые" у исполнителя показываем только задания, на которые он откликнулся
-  if (role == 'worker' && currentFilter == 'open' && currentUserId != null) {
-    tasks =
-        tasks.where((task) {
-          final responses = task['responses'];
-          if (responses == null) return false;
-          if (responses is! List) return false;
-          return responses.contains(currentUserId);
-        }).toList();
-  }
+  debugPrint(
+    'loadTasks role=$role filter=$currentFilter count=${tasks.length}',
+  );
 
   return tasks;
+}
+
+/// Минимальные запросы без composite index
+/// (arrayContains / equality по одному полю — достаточно автоиндекса).
+Future<List<QueryDocumentSnapshot<Map<String, dynamic>>>> _fetchOrderDocs({
+  required String role,
+  required String currentFilter,
+  required String uid,
+}) async {
+  final orders = FirebaseFirestore.instance.collection('orders');
+
+  if (role == 'customer') {
+    final snap = await orders.where('creator', isEqualTo: uid).get();
+    return snap.docs;
+  }
+
+  // worker
+  if (currentFilter == 'tasks') {
+    final snap = await orders.where('status', isEqualTo: 'open').get();
+    return snap.docs;
+  }
+
+  if (currentFilter == 'open') {
+    final byResponses = await orders
+        .where('responses', arrayContains: uid)
+        .get();
+    final byWorkers =
+        await orders.where('workers', arrayContains: uid).get();
+    return _mergeDocs([byResponses.docs, byWorkers.docs]);
+  }
+
+  // history: заказы, где пользователь был исполнителем, + на всякий случай отклики
+  final byWorkers =
+      await orders.where('workers', arrayContains: uid).get();
+  final byResponses =
+      await orders.where('responses', arrayContains: uid).get();
+  return _mergeDocs([byWorkers.docs, byResponses.docs]);
+}
+
+List<QueryDocumentSnapshot<Map<String, dynamic>>> _mergeDocs(
+  List<List<QueryDocumentSnapshot<Map<String, dynamic>>>> groups,
+) {
+  final map = <String, QueryDocumentSnapshot<Map<String, dynamic>>>{};
+  for (final group in groups) {
+    for (final doc in group) {
+      map[doc.id] = doc;
+    }
+  }
+  return map.values.toList();
+}
+
+bool _isVisibleOrder(Map<String, dynamic> task) {
+  final deleted = task['deleted'];
+  final active = task['active'];
+  final isDeleted = deleted == true;
+  final isActive = active == null ? true : active == true;
+  return !isDeleted && isActive;
+}
+
+bool _uidInList(dynamic list, String uid) {
+  if (list is! List) return false;
+  return list.any((e) => e?.toString() == uid);
+}
+
+LatLng? _readCityCoords(Map<String, dynamic> userData) {
+  final cityLat = userData['city_lat'];
+  final cityLng = userData['city_lng'];
+  if (cityLat == null || cityLng == null) return null;
+
+  final lat = (cityLat is num)
+      ? cityLat.toDouble()
+      : double.tryParse(cityLat.toString());
+  final lng = (cityLng is num)
+      ? cityLng.toDouble()
+      : double.tryParse(cityLng.toString());
+
+  if (lat == null || lng == null) return null;
+  if (latAbsInvalid(lat, lng)) return null;
+  return LatLng(lat, lng);
+}
+
+LatLng? _readTaskCoords(Map<String, dynamic> task) {
+  final taskLat = task['lat'];
+  final taskLng = task['lng'];
+  if (taskLat == null || taskLng == null) return null;
+
+  final lat = (taskLat is num)
+      ? taskLat.toDouble()
+      : double.tryParse(taskLat.toString());
+  final lng = (taskLng is num)
+      ? taskLng.toDouble()
+      : double.tryParse(taskLng.toString());
+
+  if (lat == null || lng == null) return null;
+  if (latAbsInvalid(lat, lng)) return null;
+  return LatLng(lat, lng);
+}
+
+bool latAbsInvalid(double lat, double lng) {
+  if (lat == 0.0 && lng == 0.0) return true;
+  if (lat < -90 || lat > 90 || lng < -180 || lng > 180) return true;
+  return false;
 }

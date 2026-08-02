@@ -1,0 +1,11 @@
+# Скопируйте в android/key.properties и заполните пароли.
+# Файл key.properties в .gitignore — в репозиторий не попадает.
+#
+# Новый keystore (если нет пароля от my-release-key.jks):
+#   keytool -genkeypair -v -keystore android/upload-keystore.jks \
+#     -keyalg RSA -keysize 2048 -validity 10000 -alias upload
+
+storePassword=ВАШ_ПАРОЛЬ
+keyPassword=ВАШ_ПАРОЛЬ
+keyAlias=upload
+storeFile=upload-keystore.jks

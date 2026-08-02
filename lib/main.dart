@@ -7,23 +7,22 @@ import 'package:intl/date_symbol_data_local.dart';
 import 'package:firebase_app_check/firebase_app_check.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:firebase_messaging/firebase_messaging.dart';
-import 'package:flutter_local_notifications/flutter_local_notifications.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:cloud_functions/cloud_functions.dart';
 import 'package:firebase_core/firebase_core.dart';
 
 import 'utils/firebase_initializer.dart';
-import 'utils/firebase_auth_config.dart';
-import 'services/user_service.dart';
-import 'utils/subscription_utils.dart';
+import 'utils/notification_service.dart';
+import 'utils/root_scaffold_messenger.dart';
+import 'utils/screenshot_tour.dart';
 import 'router/app_router.dart';
 import 'constants/app_colors.dart';
-import 'constants/env.dart';
 import 'themes/text_themes.dart';
 import 'firebase_options.dart';
 
 final getIt = GetIt.instance;
-final _ln = FlutterLocalNotificationsPlugin();
 
+@pragma('vm:entry-point')
 Future<void> _firebaseMessagingBackgroundHandler(RemoteMessage message) async {
   // Each background isolate may require its own Firebase initialization.
   try {
@@ -54,7 +53,11 @@ Future<void> main() async {
     if (_useEmulators) {
       await FirebaseAuth.instance.useAuthEmulator(_emulatorHost, 9099);
       FirebaseFirestore.instance.useFirestoreEmulator(_emulatorHost, 8080);
-      debugPrint('🔧 Emulators: Auth + Firestore at $_emulatorHost:9099 / $_emulatorHost:8080');
+      FirebaseFunctions.instanceFor(region: 'europe-west1')
+          .useFunctionsEmulator(_emulatorHost, 5001);
+      debugPrint(
+        '🔧 Emulators: Auth/Firestore/Functions at $_emulatorHost',
+      );
     } else {
       debugPrint('🔧 Real Firebase (device/production)');
     }
@@ -64,61 +67,46 @@ Future<void> main() async {
 
   getIt.registerSingleton<AppRouter>(AppRouter());
 
-  // App Check: отключить для теста Phone Auth (network-request-failed). Если без него заработает — зарегистрируй debug-токен в Firebase Console → App Check → Manage debug tokens.
-  const bool _skipAppCheckForAuthTest = true; // верни false и зарегистрируй токен перед продакшеном
-  if (!_skipAppCheckForAuthTest) {
+  if (kDebugMode) {
+    debugPrint('🛡 AppCheck skipped (debug mode)');
+  } else {
     try {
       await FirebaseAppCheck.instance.activate(
-        androidProvider: AndroidProvider.debug,
-        appleProvider: AppleProvider.debug,
+        androidProvider: AndroidProvider.playIntegrity,
+        appleProvider: AppleProvider.appAttest,
       );
-      debugPrint("🛡 AppCheck activated");
+      debugPrint('🛡 AppCheck activated');
     } catch (e) {
-      debugPrint("❌ AppCheck error: $e");
+      debugPrint('❌ AppCheck error: $e');
     }
-  } else {
-    debugPrint("🛡 AppCheck skipped (auth test mode)");
   }
 
-  if (const bool.fromEnvironment('FORCE_PHONE_AUTH_TESTING', defaultValue: false) ||
-      forcePhoneAuthTestingMode) {
-    FirebaseAuthConfig.configureForTesting();
-    if (kDebugMode) debugPrint('📱 Phone Auth: testing mode (только тестовые номера из Firebase Console)');
-  } else {
-    FirebaseAuthConfig.configureForProduction();
-  }
   await initializeDateFormatting('ru_RU');
 
   FirebaseMessaging.onBackgroundMessage(_firebaseMessagingBackgroundHandler);
 
-  const android = AndroidInitializationSettings('@mipmap/ic_launcher');
-  const ios = DarwinInitializationSettings();
-  await _ln.initialize(const InitializationSettings(android: android, iOS: ios));
-
-  // Listen for auth changes and ensure user doc + trial subscription
-  FirebaseAuth.instance.authStateChanges().listen((User? user) async {
+  // Listen for auth changes — создание профиля выполняется на экранах auth
+  FirebaseAuth.instance.authStateChanges().listen((User? user) {
     debugPrint("ℹ️ authStateChanges: user == ${user?.uid}");
     if (user != null) {
-      final ok = await UserService.createUserIfNotExists(user, "user");
-      if (ok) {
-        // ensure trial - note: this will attempt Firestore access; may fail if offline/block
-        try {
-          await SubscriptionUtils.ensureFreeTrial(user.uid);
-        } catch (e) {
-          debugPrint('⚠️ ensureFreeTrial failed: $e');
-        }
-      }
+      NotificationService.instance.initialize();
     }
   });
 
-  // Debug helpers: print Firebase info and try a simple write (non-invasive)
-  // Run only in main engine
-  if (!isBackgroundIsolate) {
+  if (FirebaseAuth.instance.currentUser != null) {
+    await NotificationService.instance.initialize();
+  }
+
+  if (!isBackgroundIsolate && kDebugMode) {
     debugFirebaseInfo();
     await testConnectFirestore();
   }
 
   runApp(const MyApp());
+
+  if (!isBackgroundIsolate) {
+    ScreenshotTour.schedule(getIt<AppRouter>());
+  }
 }
 
 /// Debug: print Firebase apps info
@@ -161,15 +149,21 @@ class MyApp extends StatelessWidget {
 
     return MaterialApp.router(
       routerConfig: appRouter.config(),
+      scaffoldMessengerKey: rootScaffoldMessengerKey,
       debugShowCheckedModeBanner: false,
       theme: ThemeData(
         appBarTheme: const AppBarTheme(
           backgroundColor: Colors.white,
+          foregroundColor: Colors.black,
+          surfaceTintColor: Colors.transparent,
           elevation: 0,
-          iconTheme: IconThemeData(color: Colors.black),
+          scrolledUnderElevation: 0,
+          toolbarHeight: 48,
+          centerTitle: true,
+          iconTheme: IconThemeData(color: Colors.black, size: 22),
           titleTextStyle: TextStyle(
             color: Colors.black,
-            fontSize: 20,
+            fontSize: 18,
             fontWeight: FontWeight.bold,
           ),
         ),

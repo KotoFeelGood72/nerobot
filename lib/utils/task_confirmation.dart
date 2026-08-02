@@ -42,7 +42,7 @@ Future<bool> showExitConfirmation(BuildContext context) async {
                     false,
                   ); // Возврат false, остаёмся на экране
                 },
-                theme: 'violet',
+                theme: 'primary',
               ),
             ),
             Square(),
@@ -53,7 +53,7 @@ Future<bool> showExitConfirmation(BuildContext context) async {
                 onPressed: () {
                   Navigator.pop(context, true);
                 },
-                theme: 'white',
+                theme: 'secondary',
               ),
             ),
           ],

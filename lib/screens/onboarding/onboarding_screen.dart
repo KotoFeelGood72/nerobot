@@ -172,7 +172,7 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
                         _currentPage == _slides.length - 1
                             ? 'Войти в аккаунт'
                             : 'Далее',
-                    theme: 'violet',
+                    theme: 'primary',
                     onPressed: _nextPage,
                   ),
                 ],

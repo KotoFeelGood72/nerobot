@@ -10,7 +10,9 @@ import 'package:latlong2/latlong.dart';
 
 import 'package:nerobot/components/ui/Btn.dart';
 import 'package:nerobot/components/ui/Inputs.dart';
+import 'package:nerobot/components/ui/app_form_field.dart';
 import 'package:nerobot/components/ui/location_picker.dart';
+import 'package:nerobot/components/ui/pill_tabs.dart';
 import 'package:nerobot/constants/app_colors.dart';
 import 'package:nerobot/models/task_draft.dart'; // <-- импорт вашей модели
 import 'package:nerobot/router/app_router.gr.dart';
@@ -93,24 +95,6 @@ class _NewTaskCreateScreenState extends State<NewTaskCreateScreen> {
     });
   }
 
-  Widget _addressModeChip({required bool active, required String label}) {
-    return Container(
-      padding: const EdgeInsets.symmetric(vertical: 6),
-      decoration: BoxDecoration(
-        color: active ? AppColors.white : Colors.transparent,
-        borderRadius: BorderRadius.circular(30),
-      ),
-      alignment: Alignment.center,
-      child: Text(
-        label,
-        style: TextStyle(
-          color: active ? AppColors.black : AppColors.gray,
-          fontWeight: FontWeight.w500,
-        ),
-      ),
-    );
-  }
-
   Future<void> _getAddressFromLatLng(LatLng location) async {
     try {
       final placemarks = await placemarkFromCoordinates(
@@ -188,28 +172,51 @@ class _NewTaskCreateScreenState extends State<NewTaskCreateScreen> {
     });
   }
 
+  Future<LatLng?> _geocodeAddress(String address) async {
+    try {
+      final locations = await locationFromAddress(address);
+      if (locations.isEmpty) return null;
+      final loc = locations.first;
+      return LatLng(loc.latitude, loc.longitude);
+    } catch (e) {
+      debugPrint('Ошибка геокодинга адреса: $e');
+      return null;
+    }
+  }
+
   void _onNextPressed() async {
     final name = _nameController.text.trim();
     final price = int.tryParse(_priceController.text.trim()) ?? 0;
     final deadline = _deadline;
-    final location = _selectedLocation;
     final address =
         _isManualAddress
             ? _manualAddressController.text.trim()
             : _selectedAddress;
+    final description = _descriptionController.text.trim();
 
     final user = FirebaseAuth.instance.currentUser;
-    String? userCity;
-
-    if (user != null) {
-      final userSnap = await FirebaseFirestore.instance
-          .collection('users')
-          .doc(user.uid)
-          .get();
-
-      userCity = userSnap.data()?['city'];
+    if (user == null) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text("Войдите в аккаунт, чтобы создать задание")),
+      );
+      return;
     }
-    final description = _descriptionController.text.trim();
+
+    final userSnap = await FirebaseFirestore.instance
+        .collection('users')
+        .doc(user.uid)
+        .get();
+    final userCity = userSnap.data()?['city'] as String?;
+
+    if (userCity == null || userCity.isEmpty) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text("Укажите город в профиле перед публикацией задания"),
+        ),
+      );
+      return;
+    }
 
     if (_paymentFor == null) {
       ScaffoldMessenger.of(
@@ -232,12 +239,7 @@ class _NewTaskCreateScreenState extends State<NewTaskCreateScreen> {
       return;
     }
 
-    if (name.isEmpty ||
-        price <= 0 ||
-        deadline == null ||
-        location == null ||
-        address == null ||
-        user == null) {
+    if (name.isEmpty || price <= 0 || deadline == null) {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(content: Text("Пожалуйста, заполните все поля")),
       );
@@ -247,34 +249,51 @@ class _NewTaskCreateScreenState extends State<NewTaskCreateScreen> {
     if (!mounted) return;
     setState(() => _isLoading = true);
 
-    final creationDate = DateTime.now();
-    final duration = deadline.difference(creationDate);
-
-    final draft = TaskDraft(
-      title: name,
-      price: price,
-      date: creationDate,
-      location: location,
-      address: address,
-      creatorUid: user.uid,
-      executionTime: duration,
-      deleted: false,
-      description: description,
-    );
-
     try {
-      final data = draft.toFirestoreMap();
+      LatLng? location = _selectedLocation;
+      if (_isManualAddress || location == null) {
+        location = await _geocodeAddress(address);
+      }
 
+      if (location == null) {
+        if (!mounted) return;
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text(
+              "Не удалось определить координаты адреса. Проверьте адрес или укажите точку на карте",
+            ),
+          ),
+        );
+        return;
+      }
+
+      final creationDate = DateTime.now();
+      final duration = deadline.difference(creationDate);
+
+      final draft = TaskDraft(
+        title: name,
+        price: price,
+        date: creationDate,
+        location: location,
+        address: address,
+        creatorUid: user.uid,
+        executionTime: duration,
+        deleted: false,
+        description: description,
+        paymentFor: _paymentFor,
+      );
+
+      final data = draft.toFirestoreMap();
       data.addAll({
-      "active": true,
-      "deleted": false,
-      "status": "open",
-      "responses": [],
-      "created_date": DateTime.now().millisecondsSinceEpoch,
-      "deadline": deadline.millisecondsSinceEpoch,
-      "payment_for": _paymentFor,
-      "city": userCity, 
-});
+        "active": true,
+        "deleted": false,
+        "status": "open",
+        "responses": [],
+        "created_date": DateTime.now().millisecondsSinceEpoch,
+        "deadline": deadline.millisecondsSinceEpoch,
+        "payment_for": _paymentFor,
+        "city": userCity,
+      });
 
       await FirebaseFirestore.instance.collection('orders').add(data);
 
@@ -289,8 +308,10 @@ class _NewTaskCreateScreenState extends State<NewTaskCreateScreen> {
       );
 
       await Future.delayed(const Duration(seconds: 2));
+      if (!mounted) return;
       context.router.replaceAll([const TaskRoute()]);
     } catch (e) {
+      if (!mounted) return;
       ScaffoldMessenger.of(
         context,
       ).showSnackBar(SnackBar(content: Text('Ошибка при размещении: $e')));
@@ -349,41 +370,21 @@ class _NewTaskCreateScreenState extends State<NewTaskCreateScreen> {
                   ),
                 ),
                 const SizedBox(height: 8),
-                Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
-                  decoration: BoxDecoration(
-                    color: AppColors.ulight,
-                    borderRadius: BorderRadius.circular(8),
-                    border: Border.all(color: AppColors.border),
-                  ),
-                  child: DropdownButton<String>(
-                    value: _paymentFor,
-                    isExpanded: true,
-                    underline: const SizedBox(),
-                    icon: const Icon(
-                      Icons.arrow_drop_down,
-                      color: AppColors.gray,
-                    ),
-                    items:
-                        _paymentOptions
-                            .map(
-                              (label) => DropdownMenuItem<String>(
-                                value: label,
-                                child: Text(
-                                  label,
-                                  style: const TextStyle(
-                                    color: AppColors.black,
-                                  ),
-                                ),
-                              ),
-                            )
-                            .toList(),
-                    onChanged: (value) {
-                      if (value != null && mounted) {
-                        setState(() => _paymentFor = value);
-                      }
-                    },
-                  ),
+                AppDropdown<String>(
+                  value: _paymentFor,
+                  items: _paymentOptions
+                      .map(
+                        (label) => DropdownMenuItem<String>(
+                          value: label,
+                          child: Text(label),
+                        ),
+                      )
+                      .toList(),
+                  onChanged: (value) {
+                    if (value != null && mounted) {
+                      setState(() => _paymentFor = value);
+                    }
+                  },
                 ),
                 const SizedBox(height: 16),
 
@@ -409,38 +410,35 @@ class _NewTaskCreateScreenState extends State<NewTaskCreateScreen> {
                   ),
                 ),
                 const SizedBox(height: 8),
-                Container(
-                  decoration: BoxDecoration(
-                    border: Border.all(color: AppColors.border, width: 1),
-                    borderRadius: BorderRadius.circular(8),
-                  ),
-                  child: GestureDetector(
-                    onTap: _pickDeadline,
-                    child: Container(
-                      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
-                      decoration: BoxDecoration(
-                        color: AppColors.ulight,
-                        borderRadius: BorderRadius.circular(8),
-                      ),
-                      child: Row(
-                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                        children: [
-                          Text(
-                            _deadline == null
-                                ? "Выбрать дату и время"
-                                : "${_deadline!.day.toString().padLeft(2, '0')}."
-                                    "${_deadline!.month.toString().padLeft(2, '0')}."
-                                    "${_deadline!.year} "
-                                    "${_deadline!.hour.toString().padLeft(2, '0')}:"
-                                    "${_deadline!.minute.toString().padLeft(2, '0')}",
-                            style: const TextStyle(
-                              color: AppColors.gray,
-                              fontSize: 16,
-                            ),
+                GestureDetector(
+                  onTap: _pickDeadline,
+                  child: Container(
+                    height: AppFormMetrics.controlHeight,
+                    padding: AppFormMetrics.controlPadding,
+                    decoration: BoxDecoration(
+                      color: AppColors.ulight,
+                      borderRadius:
+                          BorderRadius.circular(AppFormMetrics.radius),
+                      border: Border.all(color: AppColors.border),
+                    ),
+                    child: Row(
+                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                      children: [
+                        Text(
+                          _deadline == null
+                              ? "Выбрать дату и время"
+                              : "${_deadline!.day.toString().padLeft(2, '0')}."
+                                  "${_deadline!.month.toString().padLeft(2, '0')}."
+                                  "${_deadline!.year} "
+                                  "${_deadline!.hour.toString().padLeft(2, '0')}:"
+                                  "${_deadline!.minute.toString().padLeft(2, '0')}",
+                          style: const TextStyle(
+                            color: AppColors.gray,
+                            fontSize: 14,
                           ),
-                          const Icon(Icons.schedule, color: AppColors.gray),
-                        ],
-                      ),
+                        ),
+                        const Icon(Icons.schedule, color: AppColors.gray),
+                      ],
                     ),
                   ),
                 ),
@@ -456,35 +454,11 @@ class _NewTaskCreateScreenState extends State<NewTaskCreateScreen> {
                   ),
                 ),
                 const SizedBox(height: 8),
-                Container(
-                  padding: const EdgeInsets.all(2),
-                  decoration: BoxDecoration(
-                    color: AppColors.ulight,
-                    borderRadius: BorderRadius.circular(30),
-                    border: Border.all(width: 1, color: AppColors.border),
-                  ),
-                  child: Row(
-                    children: [
-                      Expanded(
-                        child: GestureDetector(
-                          onTap: () => _updateAddressMode('auto'),
-                          child: _addressModeChip(
-                            active: !_isManualAddress,
-                            label: 'Автоопределение',
-                          ),
-                        ),
-                      ),
-                      Expanded(
-                        child: GestureDetector(
-                          onTap: () => _updateAddressMode('manual'),
-                          child: _addressModeChip(
-                            active: _isManualAddress,
-                            label: 'Ввести вручную',
-                          ),
-                        ),
-                      ),
-                    ],
-                  ),
+                PillTabs(
+                  titles: const ['Автоопределение', 'Ввести вручную'],
+                  selectedIndex: _isManualAddress ? 1 : 0,
+                  onChanged: (i) =>
+                      _updateAddressMode(i == 0 ? 'auto' : 'manual'),
                 ),
                 const SizedBox(height: 16),
 
@@ -518,14 +492,13 @@ class _NewTaskCreateScreenState extends State<NewTaskCreateScreen> {
                       GestureDetector(
                         onTap: _openLocationPicker,
                         child: Container(
-                          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+                          height: AppFormMetrics.controlHeight,
+                          padding: AppFormMetrics.controlPadding,
                           decoration: BoxDecoration(
                             color: AppColors.ulight,
-                            borderRadius: BorderRadius.circular(8),
-                            border: Border.all(
-                              width: 1,
-                              color: AppColors.border,
-                            ),
+                            borderRadius:
+                                BorderRadius.circular(AppFormMetrics.radius),
+                            border: Border.all(color: AppColors.border),
                           ),
                           child: Row(
                             mainAxisAlignment: MainAxisAlignment.spaceBetween,
@@ -535,8 +508,9 @@ class _NewTaskCreateScreenState extends State<NewTaskCreateScreen> {
                                   _selectedAddress ?? "Определение адреса...",
                                   style: const TextStyle(
                                     color: AppColors.gray,
-                                    fontSize: 16,
+                                    fontSize: 14,
                                   ),
+                                  overflow: TextOverflow.ellipsis,
                                 ),
                               ),
                               const Icon(
@@ -590,7 +564,7 @@ class _NewTaskCreateScreenState extends State<NewTaskCreateScreen> {
                 Btn(
                   text: _isLoading ? "Загрузка..." : "Создать задание",
                   onPressed: _isLoading ? null : _onNextPressed,
-                  theme: 'violet',
+                  theme: 'primary',
                 ),
               ],
             ),

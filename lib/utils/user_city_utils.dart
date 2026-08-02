@@ -2,6 +2,7 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:latlong2/latlong.dart';
 import 'package:nerobot/utils/city_coordinates.dart';
+import 'package:nerobot/utils/push_token_manager.dart';
 
 /// Утилиты для работы с городом пользователя
 class UserCityUtils {
@@ -62,10 +63,20 @@ class UserCityUtils {
       final uid = FirebaseAuth.instance.currentUser?.uid;
       if (uid == null) return;
 
-      await FirebaseFirestore.instance.collection('users').doc(uid).update({
+      final coords = CityCoordinates.getCityCoordinates(cityName);
+      final data = <String, dynamic>{
         'city': cityName,
         'selectedCity': cityName,
-      });
+      };
+      if (coords != null) {
+        data['city_lat'] = coords.latitude;
+        data['city_lng'] = coords.longitude;
+      }
+
+      await FirebaseFirestore.instance.collection('users').doc(uid).update(data);
+
+      final snap = await FirebaseFirestore.instance.collection('users').doc(uid).get();
+      await PushTokenManager.syncTopicsFromUserData(snap.data());
     } catch (e) {
       print('Ошибка при установке города пользователя: $e');
     }

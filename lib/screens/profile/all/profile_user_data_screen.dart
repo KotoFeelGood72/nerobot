@@ -5,6 +5,7 @@ import 'package:flutter/material.dart';
 import 'package:nerobot/components/ui/Btn.dart';
 import 'package:nerobot/components/ui/Divider.dart';
 import 'package:nerobot/components/ui/info_row.dart';
+import 'package:nerobot/components/ui/user_avatar.dart';
 import 'package:nerobot/constants/app_colors.dart';
 import 'package:nerobot/router/app_router.gr.dart';
 
@@ -83,6 +84,7 @@ class _ProfileUserDataScreenState extends State<ProfileUserDataScreen> {
     final firstName = userData?['firstName'] ?? '';
     final lastName = userData?['lastName'] ?? '';
     final phone = userData?['phone'] ?? '';
+    final email = userData?['email'] ?? '';
     final city = userData?['city'] ?? 'Не указан';
     final about =
         userData?['about'] ??
@@ -90,77 +92,64 @@ class _ProfileUserDataScreenState extends State<ProfileUserDataScreen> {
 
     return Scaffold(
       appBar: AppBar(title: const Text('Личные данные')),
-      body: Padding(
-        padding: const EdgeInsets.all(16.0),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.center,
-          children: [
-            Container(
-              decoration: BoxDecoration(
-                shape: BoxShape.circle,
-                border: Border.all(color: AppColors.white, width: 4),
-                boxShadow: [
-                  BoxShadow(
-                    color: AppColors.black.withOpacity(0.2),
-                    blurRadius: 10,
-                    offset: const Offset(0, 5),
-                  ),
-                ],
-              ),
-              child: CircleAvatar(
-                radius: 50,
-                backgroundColor: Colors.grey[200],
-                backgroundImage:
-                    photo != ''
-                        ? NetworkImage(photo)
-                        : const AssetImage('assets/images/splash.png')
-                            as ImageProvider,
-              ),
-            ),
-            const Square(),
-            Text(
-              '$firstName $lastName',
-              style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 16),
-            ),
-            const SizedBox(height: 8),
-            InfoRow(label: 'Телефон', value: phone, hasBottomBorder: true),
-            InfoRow(label: 'Город', value: city, hasBottomBorder: true),
-            SizedBox(
-              width: double.infinity,
-              child: InfoRow(
-                label: 'О себе',
-                value: about,
-                hasBottomBorder: true,
-                isValueBelow: true,
-              ),
-            ),
-            const SizedBox(height: 24),
-            Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.end,
-                mainAxisAlignment: MainAxisAlignment.end,
-                children: [
-                  SizedBox(
-                    width: double.infinity,
-                    child: Btn(
-                      text: 'Редактировать',
-                      onPressed: () async {
-                        // ждем, пока экран редактирования закроется
-                        await AutoRouter.of(
-                          context,
-                        ).push(const ProfileEditRoute());
-                        // после возврата — обновляем данные
-                        // Но опять же: обновляем только если mounted == true
-                        if (!mounted) return;
-                        _loadUserData();
-                      },
-                      theme: 'violet',
+      body: SafeArea(
+        child: Padding(
+          padding: const EdgeInsets.fromLTRB(16, 16, 16, 8),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.center,
+            children: [
+              Container(
+                decoration: BoxDecoration(
+                  shape: BoxShape.circle,
+                  border: Border.all(color: AppColors.white, width: 4),
+                  boxShadow: [
+                    BoxShadow(
+                      color: AppColors.black.withOpacity(0.2),
+                      blurRadius: 10,
+                      offset: const Offset(0, 5),
                     ),
-                  ),
-                ],
+                  ],
+                ),
+                child: UserAvatar(imageUrl: photo, radius: 50),
               ),
-            ),
-          ],
+              const Square(),
+              Text(
+                '$firstName $lastName',
+                style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 16),
+              ),
+              const SizedBox(height: 8),
+              InfoRow(
+                label: 'Телефон',
+                value: phone.isNotEmpty ? phone : 'Не указан',
+                hasBottomBorder: true,
+              ),
+              if (email.isNotEmpty)
+                InfoRow(label: 'Email', value: email, hasBottomBorder: true),
+              InfoRow(label: 'Город', value: city, hasBottomBorder: true),
+              SizedBox(
+                width: double.infinity,
+                child: InfoRow(
+                  label: 'О себе',
+                  value: about,
+                  hasBottomBorder: true,
+                  isValueBelow: true,
+                ),
+              ),
+              const Spacer(),
+              SizedBox(
+                width: double.infinity,
+                child: Btn(
+                  text: 'Редактировать',
+                  theme: 'primary',
+                  onPressed: () async {
+                    await AutoRouter.of(context).push(const ProfileEditRoute());
+                    if (!mounted) return;
+                    _loadUserData();
+                  },
+                ),
+              ),
+            ],
+          ),
         ),
       ),
     );

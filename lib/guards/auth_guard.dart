@@ -1,5 +1,4 @@
 import 'package:auto_route/auto_route.dart';
-
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:nerobot/router/app_router.gr.dart';
 
@@ -9,11 +8,10 @@ class AuthGuard extends AutoRouteGuard {
     NavigationResolver resolver,
     StackRouter router,
   ) async {
-    final user = FirebaseAuth.instance.currentUser;
-    if (user != null) {
+    if (FirebaseAuth.instance.currentUser != null) {
       resolver.next();
     } else {
-      router.push(WelcomeRoute());
+      resolver.redirect(const WelcomeRoute());
     }
   }
 }
@@ -24,11 +22,10 @@ class UnAuthGuard extends AutoRouteGuard {
     NavigationResolver resolver,
     StackRouter router,
   ) async {
-    final user = FirebaseAuth.instance.currentUser;
-    if (user == null) {
+    if (FirebaseAuth.instance.currentUser == null) {
       resolver.next();
     } else {
-      router.push(const TaskRoute());
+      resolver.redirect(const TaskRoute());
     }
   }
 }

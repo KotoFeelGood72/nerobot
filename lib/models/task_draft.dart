@@ -1,7 +1,5 @@
 import 'package:latlong2/latlong.dart';
 
-import 'package:latlong2/latlong.dart';
-
 class TaskDraft {
   String title;
   int price;
@@ -9,9 +7,10 @@ class TaskDraft {
   LatLng location;
   String address;
   String creatorUid;
-  Duration executionTime; // ← убрали final, теперь mutable
+  Duration executionTime;
   bool deleted;
   String? description;
+  String? paymentFor;
 
   TaskDraft({
     required this.title,
@@ -23,6 +22,7 @@ class TaskDraft {
     required this.executionTime,
     required this.deleted,
     this.description,
+    this.paymentFor,
   });
 
   Map<String, dynamic> toFirestoreMap() {
@@ -31,7 +31,7 @@ class TaskDraft {
       "title": title,
       "description": description ?? "",
       "price": price,
-      "payment_for": "за смену",
+      "payment_for": paymentFor ?? "За смену",
       "lat": location.latitude,
       "lng": location.longitude,
       "address": address,
