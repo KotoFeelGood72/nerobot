@@ -5,6 +5,7 @@ import 'package:nerobot/components/ui/Btn.dart';
 import 'package:nerobot/components/ui/Divider.dart';
 import 'package:nerobot/components/ui/Inputs.dart';
 import 'package:nerobot/components/ui/info_row.dart';
+import 'package:nerobot/components/ui/linkable_selectable_text.dart';
 import 'package:nerobot/constants/app_colors.dart';
 import 'package:nerobot/router/app_router.gr.dart';
 import 'package:nerobot/utils/modal_utils.dart';
@@ -257,7 +258,7 @@ class _TaskDetailCustomerScreenState extends State<TaskDetailCustomerScreen> {
                       const SizedBox(height: 16),
 
                       // Описание задачи
-                      Text(
+                      LinkableSelectableText(
                         description,
                         style: const TextStyle(
                           fontSize: 14,

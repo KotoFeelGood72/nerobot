@@ -8,8 +8,8 @@ import 'package:nerobot/utils/role_manager.dart';
 
 /// Автопроход экранов для скриншотов стора.
 class ScreenshotTour {
-  // Временно всегда включено для генерации скриншотов.
-  static const enabled = true;
+  // Включать только для генерации скриншотов стора.
+  static const enabled = false;
 
   static const _email = 'test@raznorabochii.ru';
   static const _otp = '111111';

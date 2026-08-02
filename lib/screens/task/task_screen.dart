@@ -64,8 +64,8 @@ class _TaskScreenState extends State<TaskScreen> {
     if (_activeFilters['shiftType'] != null) c++;
     if (_activeFilters['sortBy'] != null) c++;
     final radius = _activeFilters['radiusKm'];
-    // 50 км — дефолт «весь город», в счётчик не включаем
-    if (radius is num && radius.toDouble() != 50.0) c++;
+    // Дефолтный радиус в счётчик не включаем
+    if (radius is num && radius.toDouble() != defaultSearchRadiusKm) c++;
     return c;
   }
 
@@ -354,6 +354,9 @@ class _TaskScreenState extends State<TaskScreen> {
                     if (role == 'worker') ...[
                       TaskFilters(
                         activeFiltersCount: _activeFiltersCount,
+                        initialRadiusKm:
+                            (_activeFilters['radiusKm'] as num?)?.toDouble() ??
+                            defaultSearchRadiusKm,
                         onApply: (params) async {
                           setState(() => _activeFilters = params);
                           await _loadTasks();

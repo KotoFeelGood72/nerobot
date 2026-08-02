@@ -4,17 +4,21 @@ import 'package:latlong2/latlong.dart';
 import 'package:nerobot/components/ui/Btn.dart';
 import 'package:nerobot/components/ui/Inputs.dart';
 import 'package:nerobot/components/ui/app_form_field.dart';
+import 'package:nerobot/components/ui/radius_slider_thumb.dart';
 import 'package:nerobot/constants/app_colors.dart';
+import 'package:nerobot/utils/task_loader.dart';
 import 'package:nerobot/utils/user_city_utils.dart';
 
 class TaskFilters extends StatefulWidget {
   final Function(Map<String, dynamic>) onApply;
   final int activeFiltersCount;
+  final double initialRadiusKm;
 
   const TaskFilters({
     super.key,
     required this.onApply,
     this.activeFiltersCount = 0,
+    this.initialRadiusKm = defaultSearchRadiusKm,
   });
 
   @override
@@ -24,8 +28,9 @@ class TaskFilters extends StatefulWidget {
 class _TaskFiltersState extends State<TaskFilters> {
   final _minPriceController = TextEditingController();
   String? _shiftType;
-  double _radiusKm = 50;
+  late double _radiusKm;
   LatLng? _userLocation;
+  bool _locationLoading = true;
 
   final List<String> _shiftOptions = [
     'За смену',
@@ -38,11 +43,22 @@ class _TaskFiltersState extends State<TaskFilters> {
 
   String? _sortBy;
 
+  /// Обновляет UI открытого bottom sheet, если локация догрузилась.
+  StateSetter? _modalSetState;
+
   @override
   void initState() {
     super.initState();
-    print('=== ИНИЦИАЛИЗАЦИЯ TaskFilters ===');
+    _radiusKm = widget.initialRadiusKm.clamp(1.0, maxSearchRadiusKm);
     _fetchUserLocation();
+  }
+
+  @override
+  void didUpdateWidget(covariant TaskFilters oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (oldWidget.initialRadiusKm != widget.initialRadiusKm) {
+      _radiusKm = widget.initialRadiusKm.clamp(1.0, maxSearchRadiusKm);
+    }
   }
 
   @override
@@ -52,23 +68,29 @@ class _TaskFiltersState extends State<TaskFilters> {
   }
 
   Future<void> _fetchUserLocation() async {
-    print('=== ВЫЗОВ _fetchUserLocation ===');
-    // Получаем координаты выбранного города пользователя
+    setState(() => _locationLoading = true);
     final cityCoordinates = await UserCityUtils.getUserCityCoordinates();
 
-    if (mounted) {
-      setState(() {
-        if (cityCoordinates != null) {
-          _userLocation = cityCoordinates;
-          print(
-            'Установлены координаты города пользователя: ${cityCoordinates.latitude}, ${cityCoordinates.longitude}',
-          );
-        } else {
-          // Если город не найден, используем текущее местоположение как fallback
-          _getCurrentLocation();
-        }
-      });
+    if (!mounted) return;
+
+    if (cityCoordinates != null) {
+      _setUserLocation(cityCoordinates);
+      return;
     }
+
+    await _getCurrentLocation();
+    if (mounted && _userLocation == null) {
+      setState(() => _locationLoading = false);
+      _modalSetState?.call(() {});
+    }
+  }
+
+  void _setUserLocation(LatLng location) {
+    setState(() {
+      _userLocation = location;
+      _locationLoading = false;
+    });
+    _modalSetState?.call(() {});
   }
 
   Future<void> _getCurrentLocation() async {
@@ -79,20 +101,22 @@ class _TaskFiltersState extends State<TaskFilters> {
       }
 
       final position = await Geolocator.getCurrentPosition();
-      if (mounted) {
-        setState(() {
-          _userLocation = LatLng(position.latitude, position.longitude);
-        });
-        print(
-          'Установлены координаты текущего местоположения: ${position.latitude}, ${position.longitude}',
-        );
-      }
+      if (!mounted) return;
+      _setUserLocation(LatLng(position.latitude, position.longitude));
     } catch (e) {
-      print('Ошибка при получении текущего местоположения: $e');
+      debugPrint('Ошибка при получении текущего местоположения: $e');
+      if (mounted) {
+        setState(() => _locationLoading = false);
+        _modalSetState?.call(() {});
+      }
     }
   }
 
-  void _applyFilters() {
+  Future<void> _applyFilters() async {
+    if (_userLocation == null) {
+      await _fetchUserLocation();
+    }
+
     final filters = <String, dynamic>{
       'minPrice': double.tryParse(_minPriceController.text),
       'shiftType': _shiftType,
@@ -101,48 +125,25 @@ class _TaskFiltersState extends State<TaskFilters> {
       'sortBy': _sortBy,
     };
 
-    // Отладочная информация
-    print('=== ПРИМЕНЯЕМ ФИЛЬТРЫ ===');
-    print('minPrice: ${filters['minPrice']}');
-    print('shiftType: ${filters['shiftType']}');
-    print('radiusKm: ${filters['radiusKm']}');
-    print('sortBy: ${filters['sortBy']}');
-    print('userLocation: ${filters['userLocation']}');
-    if (filters['userLocation'] != null) {
-      print(
-        'Координаты пользователя: ${filters['userLocation'].latitude}, ${filters['userLocation'].longitude}',
-      );
-    } else {
-      print('⚠️ ВНИМАНИЕ: userLocation равен null!');
-    }
-    print('========================');
+    debugPrint(
+      'apply filters: radiusKm=${filters['radiusKm']} '
+      'location=${filters['userLocation']}',
+    );
 
     widget.onApply(filters);
-    Navigator.pop(context); // Закрыть BottomSheet после применения
-  }
-
-  void _resetFilters() {
-    if (mounted) {
-      setState(() {
-        _minPriceController.clear();
-        _shiftType = null;
-        _radiusKm = 50;
-        _sortBy = null;
-      });
-    }
+    if (mounted) Navigator.pop(context);
   }
 
   void _resetFiltersInModal(StateSetter setModalState) {
     setModalState(() {
       _minPriceController.clear();
       _shiftType = null;
-      _radiusKm = 50;
+      _radiusKm = defaultSearchRadiusKm;
       _sortBy = null;
     });
   }
 
   void _openFilterSheet() {
-    print('Открываем фильтры, текущий радиус: $_radiusKm');
     showModalBottomSheet(
       context: context,
       isScrollControlled: true,
@@ -151,9 +152,9 @@ class _TaskFiltersState extends State<TaskFilters> {
         borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
       ),
       builder: (context) {
-        print('Builder вызван, радиус: $_radiusKm');
         return StatefulBuilder(
           builder: (context, setModalState) {
+            _modalSetState = setModalState;
             return Padding(
               padding: MediaQuery.of(
                 context,
@@ -163,14 +164,13 @@ class _TaskFiltersState extends State<TaskFilters> {
                   mainAxisSize: MainAxisSize.min,
                   children: [
                     const Text(
-                      "Фильтры",
+                      'Фильтры',
                       style: TextStyle(
                         fontSize: 16,
                         fontWeight: FontWeight.bold,
                       ),
                     ),
                     const SizedBox(height: 16),
-
                     Inputs(
                       controller: _minPriceController,
                       backgroundColor: AppColors.ulight,
@@ -179,9 +179,7 @@ class _TaskFiltersState extends State<TaskFilters> {
                       fieldType: 'number',
                       maxLength: 9,
                     ),
-
                     const SizedBox(height: 16),
-
                     Row(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
@@ -190,7 +188,7 @@ class _TaskFiltersState extends State<TaskFilters> {
                             crossAxisAlignment: CrossAxisAlignment.start,
                             children: [
                               const Text(
-                                "Тип оплаты",
+                                'Тип оплаты',
                                 style: TextStyle(
                                   fontSize: 14,
                                   fontWeight: FontWeight.w500,
@@ -200,15 +198,16 @@ class _TaskFiltersState extends State<TaskFilters> {
                               const SizedBox(height: 4),
                               AppDropdown<String>(
                                 value: _shiftType,
-                                hint: "Тип оплаты",
-                                items: _shiftOptions
-                                    .map(
-                                      (label) => DropdownMenuItem<String>(
-                                        value: label,
-                                        child: Text(label),
-                                      ),
-                                    )
-                                    .toList(),
+                                hint: 'Тип оплаты',
+                                items:
+                                    _shiftOptions
+                                        .map(
+                                          (label) => DropdownMenuItem<String>(
+                                            value: label,
+                                            child: Text(label),
+                                          ),
+                                        )
+                                        .toList(),
                                 onChanged: (value) {
                                   setModalState(() => _shiftType = value);
                                 },
@@ -222,7 +221,7 @@ class _TaskFiltersState extends State<TaskFilters> {
                             crossAxisAlignment: CrossAxisAlignment.start,
                             children: [
                               const Text(
-                                "Сортировка",
+                                'Сортировка',
                                 style: TextStyle(
                                   fontSize: 14,
                                   fontWeight: FontWeight.w500,
@@ -232,15 +231,16 @@ class _TaskFiltersState extends State<TaskFilters> {
                               const SizedBox(height: 4),
                               AppDropdown<String>(
                                 value: _sortBy,
-                                hint: "Сортировка",
-                                items: _sortOptions
-                                    .map(
-                                      (label) => DropdownMenuItem<String>(
-                                        value: label,
-                                        child: Text(label),
-                                      ),
-                                    )
-                                    .toList(),
+                                hint: 'Сортировка',
+                                items:
+                                    _sortOptions
+                                        .map(
+                                          (label) => DropdownMenuItem<String>(
+                                            value: label,
+                                            child: Text(label),
+                                          ),
+                                        )
+                                        .toList(),
                                 onChanged: (value) {
                                   setModalState(() => _sortBy = value);
                                 },
@@ -250,90 +250,9 @@ class _TaskFiltersState extends State<TaskFilters> {
                         ),
                       ],
                     ),
-
                     const SizedBox(height: 16),
-
-                    // 📍 Радиус
-                    if (_userLocation != null)
-                      Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          const Text(
-                            "Радиус поиска (км)",
-                            style: TextStyle(
-                              fontSize: 14,
-                              fontWeight: FontWeight.w500,
-                              color: AppColors.gray,
-                            ),
-                          ),
-                          const SizedBox(height: 8),
-                          LayoutBuilder(
-                            builder: (context, constraints) {
-                              const min = 1.0;
-                              const max = 50.0;
-                              // Горизонтальные отступы трека Slider ≈ половины thumb
-                              const sideInset = 24.0;
-                              final trackWidth =
-                                  (constraints.maxWidth - sideInset)
-                                      .clamp(0.0, double.infinity);
-                              final t = (_radiusKm - min) / (max - min);
-                              final thumbCenterX = sideInset / 2 + t * trackWidth;
-                              final label = '${_radiusKm.round()} км';
-
-                              return Column(
-                                children: [
-                                  SizedBox(
-                                    height: 22,
-                                    width: double.infinity,
-                                    child: Stack(
-                                      clipBehavior: Clip.none,
-                                      children: [
-                                        Positioned(
-                                          left: (thumbCenterX - 28).clamp(
-                                            0.0,
-                                            constraints.maxWidth - 56,
-                                          ),
-                                          child: SizedBox(
-                                            width: 56,
-                                            child: Text(
-                                              label,
-                                              textAlign: TextAlign.center,
-                                              style: const TextStyle(
-                                                fontSize: 12,
-                                                fontWeight: FontWeight.w600,
-                                                color: AppColors.violet,
-                                              ),
-                                            ),
-                                          ),
-                                        ),
-                                      ],
-                                    ),
-                                  ),
-                                  SliderTheme(
-                                    data: SliderTheme.of(context).copyWith(
-                                      showValueIndicator:
-                                          ShowValueIndicator.never,
-                                    ),
-                                    child: Slider(
-                                      value: _radiusKm,
-                                      min: min,
-                                      max: max,
-                                      divisions: 49,
-                                      activeColor: AppColors.violet,
-                                      onChanged: (value) {
-                                        setModalState(() => _radiusKm = value);
-                                      },
-                                    ),
-                                  ),
-                                ],
-                              );
-                            },
-                          ),
-                        ],
-                      ),
-
+                    _buildRadiusSection(setModalState),
                     const SizedBox(height: 16),
-
                     Row(
                       children: [
                         Expanded(
@@ -362,6 +281,69 @@ class _TaskFiltersState extends State<TaskFilters> {
           },
         );
       },
+    ).whenComplete(() {
+      _modalSetState = null;
+    });
+  }
+
+  Widget _buildRadiusSection(StateSetter setModalState) {
+    const min = 1.0;
+    const max = maxSearchRadiusKm;
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        const Text(
+          'Радиус поиска (км)',
+          style: TextStyle(
+            fontSize: 14,
+            fontWeight: FontWeight.w500,
+            color: AppColors.gray,
+          ),
+        ),
+        Text(
+          _locationLoading
+              ? 'Определяем город…'
+              : _userLocation == null
+              ? 'Город не выбран — укажите город в профиле'
+              : 'От центра вашего города',
+          style: TextStyle(
+            fontSize: 12,
+            height: 1.2,
+            color:
+                _userLocation == null && !_locationLoading
+                    ? AppColors.red
+                    : AppColors.gray,
+          ),
+        ),
+        const SizedBox(height: 10),
+        SliderTheme(
+          data: SliderTheme.of(context).copyWith(
+            trackHeight: 10,
+            activeTrackColor: AppColors.violet,
+            inactiveTrackColor: AppColors.border,
+            disabledActiveTrackColor: AppColors.violet,
+            disabledInactiveTrackColor: AppColors.border,
+            thumbColor: AppColors.violet,
+            overlayColor: AppColors.violet.withValues(alpha: 0.14),
+            overlayShape: const RoundSliderOverlayShape(overlayRadius: 28),
+            thumbShape: RadiusSliderThumb(value: _radiusKm),
+            activeTickMarkColor: Colors.transparent,
+            inactiveTickMarkColor: Colors.transparent,
+            showValueIndicator: ShowValueIndicator.never,
+            trackShape: const RoundedRectSliderTrackShape(),
+          ),
+          child: Slider(
+            value: _radiusKm,
+            min: min,
+            max: max,
+            divisions: (max - min).round(),
+            onChanged: (value) {
+              setModalState(() => _radiusKm = value);
+            },
+          ),
+        ),
+      ],
     );
   }
 
@@ -375,7 +357,7 @@ class _TaskFiltersState extends State<TaskFilters> {
         label: Row(
           mainAxisSize: MainAxisSize.min,
           children: [
-            const Text("Фильтры"),
+            const Text('Фильтры'),
             if (widget.activeFiltersCount > 0) ...[
               const SizedBox(width: 4),
               Container(

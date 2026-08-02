@@ -6,6 +6,7 @@ import 'package:intl/intl.dart';
 import 'package:nerobot/components/ui/Btn.dart';
 import 'package:nerobot/components/ui/Divider.dart';
 import 'package:nerobot/components/ui/info_row.dart';
+import 'package:nerobot/components/ui/linkable_selectable_text.dart';
 import 'package:nerobot/constants/app_colors.dart';
 import 'package:nerobot/utils/send_repsponse.dart';
 
@@ -151,8 +152,8 @@ class _TaskDetailExecutorScreenState extends State<TaskDetailExecutorScreen> {
                         ),
                       ),
                       const Square(),
-                      Text(
-                        task['description'] ?? '',
+                      LinkableSelectableText(
+                        task['description']?.toString() ?? '',
                         style: const TextStyle(fontSize: 14, color: Colors.grey),
                       ),
                       const Square(height: 24),

@@ -42,19 +42,59 @@ class UserCityUtils {
 
   /// Получить координаты выбранного города пользователя
   static Future<LatLng?> getUserCityCoordinates() async {
-    final cityName = await getUserCity();
-    if (cityName == null) {
-      print('⚠️ Город пользователя не найден');
+    try {
+      final uid = FirebaseAuth.instance.currentUser?.uid;
+      if (uid == null) return null;
+
+      final doc =
+          await FirebaseFirestore.instance.collection('users').doc(uid).get();
+      final data = doc.data();
+      if (data == null) return null;
+
+      final cityLat = data['city_lat'];
+      final cityLng = data['city_lng'];
+      if (cityLat != null && cityLng != null) {
+        final lat =
+            (cityLat is num)
+                ? cityLat.toDouble()
+                : double.tryParse(cityLat.toString());
+        final lng =
+            (cityLng is num)
+                ? cityLng.toDouble()
+                : double.tryParse(cityLng.toString());
+        if (lat != null &&
+            lng != null &&
+            !(lat == 0.0 && lng == 0.0) &&
+            lat >= -90 &&
+            lat <= 90 &&
+            lng >= -180 &&
+            lng <= 180) {
+          print('Координаты города из профиля: $lat, $lng');
+          return LatLng(lat, lng);
+        }
+      }
+
+      final cityName =
+          data['city'] ?? data['selectedCity'] ?? data['location']?['city'];
+      if (cityName is! String || cityName.isEmpty) {
+        print('⚠️ Город пользователя не найден');
+        return null;
+      }
+
+      final coordinates = CityCoordinates.getCityCoordinates(cityName);
+      if (coordinates != null) {
+        print(
+          'Найдены координаты для города "$cityName": '
+          '${coordinates.latitude}, ${coordinates.longitude}',
+        );
+      } else {
+        print('⚠️ Координаты для города "$cityName" не найдены');
+      }
+      return coordinates;
+    } catch (e) {
+      print('Ошибка при получении координат города: $e');
       return null;
     }
-
-    final coordinates = CityCoordinates.getCityCoordinates(cityName);
-    if (coordinates != null) {
-      print('Найдены координаты для города "$cityName": ${coordinates.latitude}, ${coordinates.longitude}');
-    } else {
-      print('⚠️ Координаты для города "$cityName" не найдены');
-    }
-    return coordinates;
   }
 
   /// Установить выбранный город пользователя в Firestore

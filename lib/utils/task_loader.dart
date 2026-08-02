@@ -10,6 +10,9 @@ const _historyStatuses = ['success', 'done', 'cancelled'];
 /// Радиус «весь город» по умолчанию (км).
 const defaultSearchRadiusKm = 50.0;
 
+/// Максимальный радиус поиска в фильтрах (км).
+const maxSearchRadiusKm = 200.0;
+
 Future<List<Map<String, dynamic>>> loadTasks({
   required String role,
   required String currentFilter,
@@ -26,7 +29,6 @@ Future<List<Map<String, dynamic>>> loadTasks({
   if (currentUserId == null) return [];
 
   LatLng? userCityCoords;
-  String? userCityName;
 
   if (role == 'worker') {
     final userSnap = await FirebaseFirestore.instance
@@ -37,9 +39,10 @@ Future<List<Map<String, dynamic>>> loadTasks({
     if (userData != null) {
       userCityCoords = _readCityCoords(userData);
       final cityName = userData['city'] ?? userData['selectedCity'];
-      if (cityName is String && cityName.isNotEmpty) {
-        userCityName = cityName;
-        userCityCoords ??= CityCoordinates.getCityCoordinates(cityName);
+      if (userCityCoords == null &&
+          cityName is String &&
+          cityName.isNotEmpty) {
+        userCityCoords = CityCoordinates.getCityCoordinates(cityName);
       }
     }
   }
@@ -138,34 +141,19 @@ Future<List<Map<String, dynamic>>> loadTasks({
     }).toList();
   }
 
-  final filterCenter = userCityCoords ?? userLocation;
+  final filterCenter = userLocation ?? userCityCoords;
   final filterRadiusKm = radiusKm ?? defaultSearchRadiusKm;
 
+  // Радиус применяем для ленты «Новые» у исполнителя.
   if (role == 'worker' &&
       currentFilter == 'tasks' &&
       filterCenter != null) {
     final before = tasks.length;
-    final distance = Distance();
-    final radiusMeters = filterRadiusKm * 1000;
-
-    tasks = tasks.where((task) {
-      final taskCoords = _readTaskCoords(task);
-      if (taskCoords != null) {
-        final distanceMeters = distance.as(
-          LengthUnit.Meter,
-          filterCenter,
-          taskCoords,
-        );
-        return distanceMeters <= radiusMeters;
-      }
-      if (userCityName != null) {
-        final taskCity = task['city']?.toString();
-        return taskCity != null &&
-            taskCity.isNotEmpty &&
-            taskCity.toLowerCase() == userCityName.toLowerCase();
-      }
-      return false;
-    }).toList();
+    tasks = filterTasksByRadius(
+      tasks: tasks,
+      center: filterCenter,
+      radiusKm: filterRadiusKm,
+    );
 
     debugPrint(
       'radius filter: center=${filterCenter.latitude},${filterCenter.longitude} '
@@ -292,6 +280,32 @@ LatLng? _readTaskCoords(Map<String, dynamic> task) {
   if (lat == null || lng == null) return null;
   if (latAbsInvalid(lat, lng)) return null;
   return LatLng(lat, lng);
+}
+
+/// Фильтр по радиусу: координаты задачи, иначе центр её города.
+/// Задачи без координат и без известного города отбрасываются.
+@visibleForTesting
+List<Map<String, dynamic>> filterTasksByRadius({
+  required List<Map<String, dynamic>> tasks,
+  required LatLng center,
+  required double radiusKm,
+}) {
+  final distance = Distance();
+  final radiusMeters = radiusKm * 1000;
+
+  return tasks.where((task) {
+    final taskCoords =
+        _readTaskCoords(task) ??
+        CityCoordinates.getCityCoordinates(task['city']?.toString() ?? '');
+    if (taskCoords == null) return false;
+
+    final distanceMeters = distance.as(
+      LengthUnit.Meter,
+      center,
+      taskCoords,
+    );
+    return distanceMeters <= radiusMeters;
+  }).toList();
 }
 
 bool latAbsInvalid(double lat, double lng) {
