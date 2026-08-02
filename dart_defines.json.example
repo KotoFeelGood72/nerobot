@@ -1,1 +1,6 @@
-{"MAPKIT_API_KEY": "ключ_из_MapKit_мобильный_SDK", "YANDEX_MAPS_API_KEY": "ключ_из_JavaScript_API_и_HTTP_Геокодер"}
+{
+  "MAPKIT_API_KEY": "ключ_из_MapKit_мобильный_SDK",
+  "YANDEX_MAPS_API_KEY": "ключ_из_JavaScript_API_и_HTTP_Геокодер",
+  "DADATA_API_KEY": "api_ключ_dadata",
+  "DADATA_SECRET_KEY": "секретный_ключ_dadata"
+}

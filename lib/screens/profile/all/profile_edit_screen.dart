@@ -7,12 +7,14 @@ import 'package:flutter_masked_text2/flutter_masked_text2.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:nerobot/components/ui/Btn.dart';
 import 'package:nerobot/components/ui/Inputs.dart';
-import 'package:nerobot/components/ui/app_form_field.dart';
+import 'package:nerobot/components/ui/city_autocomplete_field.dart';
 import 'package:nerobot/components/ui/user_avatar.dart';
 import 'package:nerobot/constants/app_colors.dart';
 import 'package:nerobot/router/app_router.gr.dart';
+import 'package:nerobot/services/dadata_service.dart';
 import 'package:nerobot/utils/clean_phone.dart';
 import 'package:nerobot/utils/city_coordinates.dart';
+import 'package:nerobot/utils/push_token_manager.dart';
 
 @RoutePage()
 class ProfileEditScreen extends StatefulWidget {
@@ -34,174 +36,13 @@ class _ProfileEditScreenState extends State<ProfileEditScreen> {
   final TextEditingController aboutMySelfController = TextEditingController();
 
   String? photoUrl;
-  String selectedCity = 'Москва'; // По умолчанию Москва
+  String selectedCity = 'Москва';
+  double? selectedCityLat;
+  double? selectedCityLng;
   bool isLoading = true; // первичная загрузка
   bool _inProcess = false; // лоадер на любые операции
 
   final String? userId = FirebaseAuth.instance.currentUser?.uid;
-
-  // Список городов для выбора
-  final List<String> cities = [
-    'Москва',
-    'Санкт-Петербург',
-    'Новосибирск',
-    'Екатеринбург',
-    'Казань',
-    'Нижний Новгород',
-    'Челябинск',
-    'Самара',
-    'Уфа',
-    'Ростов-на-Дону',
-    'Краснодар',
-    'Пермь',
-    'Воронеж',
-    'Волгоград',
-    'Красноярск',
-    'Саратов',
-    'Тюмень',
-    'Тольятти',
-    'Ижевск',
-    'Барнаул',
-    'Ульяновск',
-    'Иркутск',
-    'Хабаровск',
-    'Ярославль',
-    'Владивосток',
-    'Махачкала',
-    'Томск',
-    'Оренбург',
-    'Кемерово',
-    'Новокузнецк',
-    'Рязань',
-    'Астрахань',
-    'Набережные Челны',
-    'Пенза',
-    'Липецк',
-    'Киров',
-    'Чебоксары',
-    'Тула',
-    'Калининград',
-    'Курск',
-    'Улан-Удэ',
-    'Ставрополь',
-    'Сочи',
-    'Иваново',
-    'Брянск',
-    'Белгород',
-    'Архангельск',
-    'Владимир',
-    'Севастополь',
-    'Чита',
-    'Грозный',
-    'Калининград',
-    'Смоленск',
-    'Вологда',
-    'Курган',
-    'Орёл',
-    'Череповец',
-    'Владикавказ',
-    'Мурманск',
-    'Сургут',
-    'Волжский',
-    'Саранск',
-    'Стерлитамак',
-    'Грозный',
-    'Якутск',
-    'Кострома',
-    'Петрозаводск',
-    'Нижневартовск',
-    'Йошкар-Ола',
-    'Новороссийск',
-    'Сыктывкар',
-    'Нижнекамск',
-    'Шахты',
-    'Дзержинск',
-    'Орск',
-    'Энгельс',
-    'Бийск',
-    'Прокопьевск',
-    'Рыбинск',
-    'Балаково',
-    'Ухта',
-    'Королёв',
-    'Сызрань',
-    'Мытищи',
-    'Люберцы',
-    'Волгодонск',
-    'Новочеркасск',
-    'Абакан',
-    'Находка',
-    'Уссурийск',
-    'Березники',
-    'Салават',
-    'Электросталь',
-    'Миасс',
-    'Первоуральск',
-    'Рубцовск',
-    'Альметьевск',
-    'Ковров',
-    'Коломна',
-    'Майкоп',
-    'Пятигорск',
-    'Одинцово',
-    'Копейск',
-    'Хасавюрт',
-    'Новомосковск',
-    'Кисловодск',
-    'Серпухов',
-    'Первоуральск',
-    'Нефтеюганск',
-    'Новошахтинск',
-    'Щёлково',
-    'Дербент',
-    'Орехово-Зуево',
-    'Нефтекамск',
-    'Черкесск',
-    'Батайск',
-    'Раменское',
-    'Домодедово',
-    'Сергиев Посад',
-    'Армавир',
-    'Ухта',
-    'Ленинск-Кузнецкий',
-    'Междуреченск',
-    'Киселёвск',
-    'Анжеро-Судженск',
-    'Юрга',
-    'Белово',
-    'Прокопьевск',
-    'Осинники',
-    'Мыски',
-    'Мариинск',
-    'Таштагол',
-    'Топки',
-    'Полысаево',
-    'Гурьевск',
-    'Салаир',
-    'Тайга',
-    'Берёзовский',
-    'Калтан',
-    'Кемерово',
-    'Новокузнецк',
-    'Прокопьевск',
-    'Ленинск-Кузнецкий',
-    'Киселёвск',
-    'Междуреченск',
-    'Юрга',
-    'Белово',
-    'Анжеро-Судженск',
-    'Осинники',
-    'Мыски',
-    'Мариинск',
-    'Таштагол',
-    'Топки',
-    'Полысаево',
-    'Гурьевск',
-    'Салаир',
-    'Тайга',
-    'Берёзовский',
-    'Калтан',
-  ];
 
   /* ------------------------------------------------------------ */
   /*  INIT                                                        */
@@ -229,37 +70,81 @@ class _ProfileEditScreenState extends State<ProfileEditScreen> {
         phoneController.text = data['phone'] ?? '';
         aboutMySelfController.text = data['about'] ?? '';
         selectedCity = data['city'] ?? 'Москва';
+        selectedCityLat =
+            (data['city_lat'] is num)
+                ? (data['city_lat'] as num).toDouble()
+                : double.tryParse('${data['city_lat'] ?? ''}');
+        selectedCityLng =
+            (data['city_lng'] is num)
+                ? (data['city_lng'] as num).toDouble()
+                : double.tryParse('${data['city_lng'] ?? ''}');
         photoUrl = data['image_url'];
         isLoading = false;
       });
     }
   }
 
+  void _onCitySelected(DadataCitySuggestion city) {
+    setState(() {
+      selectedCity = city.name;
+      selectedCityLat = city.lat;
+      selectedCityLng = city.lng;
+    });
+  }
+
+  void _onCityTextChanged(String value) {
+    setState(() {
+      selectedCity = value;
+      // Координаты сбрасываем, пока город не выбран из подсказки.
+      selectedCityLat = null;
+      selectedCityLng = null;
+    });
+  }
+
   Future<void> _updateUserProfile() async {
+    final city = selectedCity.trim();
+    if (city.isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Укажите город')),
+      );
+      return;
+    }
+
     setState(() => _inProcess = true);
 
     try {
       final cleanedPhone = CleanPhone.cleanPhoneNumber(phoneController.text);
-      
-      // Получаем координаты города
-      final cityCoords = CityCoordinates.getCityCoordinates(selectedCity);
-      
+
+      var lat = selectedCityLat;
+      var lng = selectedCityLng;
+      if (lat == null || lng == null) {
+        final fallback = CityCoordinates.getCityCoordinates(city);
+        lat = fallback?.latitude;
+        lng = fallback?.longitude;
+      }
+
       final updateData = <String, dynamic>{
         'firstName': firstNameController.text,
         'lastName': lastNameController.text,
         'phone': cleanedPhone,
-        'city': selectedCity,
+        'city': city,
         'about': aboutMySelfController.text,
         'image_url': photoUrl ?? '',
       };
-      
-      // Добавляем координаты города, если они найдены
-      if (cityCoords != null) {
-        updateData['city_lat'] = cityCoords.latitude;
-        updateData['city_lng'] = cityCoords.longitude;
+
+      if (lat != null && lng != null) {
+        updateData['city_lat'] = lat;
+        updateData['city_lng'] = lng;
       }
 
-      await FirebaseFirestore.instance.collection('users').doc(userId).update(updateData);
+      await FirebaseFirestore.instance
+          .collection('users')
+          .doc(userId)
+          .update(updateData);
+
+      final snap =
+          await FirebaseFirestore.instance.collection('users').doc(userId).get();
+      await PushTokenManager.syncTopicsFromUserData(snap.data());
 
       if (mounted) AutoRouter.of(context).replaceAll([TaskRoute()]);
     } finally {
@@ -421,7 +306,11 @@ class _ProfileEditScreenState extends State<ProfileEditScreen> {
                   fieldType: 'phone',
                 ),
                 const SizedBox(height: 16),
-                _buildCityDropdown(),
+                CityAutocompleteField(
+                  initialCity: selectedCity,
+                  onSelected: _onCitySelected,
+                  onTextChanged: _onCityTextChanged,
+                ),
                 const SizedBox(height: 16),
                 Inputs(
                   controller: aboutMySelfController,
@@ -456,39 +345,4 @@ class _ProfileEditScreenState extends State<ProfileEditScreen> {
     );
   }
 
-  Widget _buildCityDropdown() {
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Padding(
-          padding: const EdgeInsets.only(bottom: 4),
-          child: Text(
-            'Город',
-            style: TextStyle(
-              color: Colors.black,
-              fontSize: 14,
-              fontWeight: FontWeight.w500,
-            ),
-          ),
-        ),
-        AppDropdown<String>(
-          value: selectedCity,
-          iconColor: AppColors.black,
-          items: cities
-              .map(
-                (city) => DropdownMenuItem<String>(
-                  value: city,
-                  child: Text(city),
-                ),
-              )
-              .toList(),
-          onChanged: (String? newValue) {
-            if (newValue != null) {
-              setState(() => selectedCity = newValue);
-            }
-          },
-        ),
-      ],
-    );
-  }
 }

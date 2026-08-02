@@ -6,11 +6,18 @@ cd "$(dirname "$0")/.."
 echo "==> Flutter pub get"
 flutter pub get
 
+DEFINES=()
+if [[ -f dart_defines.json ]]; then
+  DEFINES+=(--dart-define-from-file=dart_defines.json)
+else
+  echo "⚠️ dart_defines.json не найден — карты/DaData могут быть без ключей"
+fi
+
 echo "==> Build Android App Bundle (Google Play / RuStore)"
-flutter build appbundle --release
+flutter build appbundle --release "${DEFINES[@]}"
 
 echo "==> Build Android APK (RuStore fallback / sideload)"
-flutter build apk --release
+flutter build apk --release "${DEFINES[@]}"
 
 OUT_DIR="build/store-release"
 mkdir -p "$OUT_DIR"
